@@ -8,6 +8,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.synyx.urlaubsverwaltung.person.PersonId;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,23 +35,23 @@ class UserNotificationSettingsServiceImplTest {
     void ensureFindNotificationSettings() {
 
         final UserNotificationSettingsEntity entity = new UserNotificationSettingsEntity();
-        entity.setPersonId(1);
+        entity.setPersonId(1L);
         entity.setRestrictToDepartments(true);
 
-        when(repository.findById(1)).thenReturn(Optional.of(entity));
+        when(repository.findById(1L)).thenReturn(Optional.of(entity));
 
-        final UserNotificationSettings actual = sut.findNotificationSettings(new PersonId(1));
-        assertThat(actual.getPersonId()).isEqualTo(new PersonId(1));
+        final UserNotificationSettings actual = sut.findNotificationSettings(new PersonId(1L));
+        assertThat(actual.getPersonId()).isEqualTo(new PersonId(1L));
         assertThat(actual.isRestrictToDepartments()).isTrue();
     }
 
     @Test
     void ensureFindNotificationSettingsReturnsDefault() {
 
-        when(repository.findById(1)).thenReturn(Optional.empty());
+        when(repository.findById(1L)).thenReturn(Optional.empty());
 
-        final UserNotificationSettings actual = sut.findNotificationSettings(new PersonId(1));
-        assertThat(actual.getPersonId()).isEqualTo(new PersonId(1));
+        final UserNotificationSettings actual = sut.findNotificationSettings(new PersonId(1L));
+        assertThat(actual.getPersonId()).isEqualTo(new PersonId(1L));
         assertThat(actual.isRestrictToDepartments()).isFalse();
     }
 
@@ -58,9 +60,9 @@ class UserNotificationSettingsServiceImplTest {
 
         when(repository.save(any(UserNotificationSettingsEntity.class))).thenAnswer(returnsFirstArg());
 
-        final UserNotificationSettings actual = sut.updateNotificationSettings(new PersonId(1), true);
+        final UserNotificationSettings actual = sut.updateNotificationSettings(new PersonId(1L), true);
 
-        assertThat(actual.getPersonId()).isEqualTo(new PersonId(1));
+        assertThat(actual.getPersonId()).isEqualTo(new PersonId(1L));
         assertThat(actual.isRestrictToDepartments()).isTrue();
 
         final ArgumentCaptor<UserNotificationSettingsEntity> captor = ArgumentCaptor.forClass(UserNotificationSettingsEntity.class);
@@ -69,5 +71,19 @@ class UserNotificationSettingsServiceImplTest {
         final UserNotificationSettingsEntity actualPersisted = captor.getValue();
         assertThat(actualPersisted.getPersonId()).isEqualTo(1);
         assertThat(actualPersisted.isRestrictToDepartments()).isTrue();
+    }
+
+    @Test
+    void ensureFindNotificationSettingsWithMultipleSameIdsReturnsCorrectValue() {
+
+        final UserNotificationSettingsEntity entity = new UserNotificationSettingsEntity();
+        entity.setPersonId(1L);
+        entity.setRestrictToDepartments(true);
+
+        when(repository.findAllById(List.of(1L, 1L))).thenReturn(List.of(entity, entity));
+
+        final Map<PersonId, UserNotificationSettings> notificationSettings = sut.findNotificationSettings(List.of(new PersonId(1L), new PersonId(1L)));
+        assertThat(notificationSettings.get(new PersonId(1L)).getPersonId()).isEqualTo(new PersonId(1L));
+        assertThat(notificationSettings.get(new PersonId(1L)).isRestrictToDepartments()).isTrue();
     }
 }

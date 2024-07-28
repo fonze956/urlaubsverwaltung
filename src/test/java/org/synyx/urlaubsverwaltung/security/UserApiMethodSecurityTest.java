@@ -7,12 +7,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.core.oidc.IdTokenClaimNames;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
-import org.synyx.urlaubsverwaltung.department.Department;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
@@ -47,7 +45,7 @@ class UserApiMethodSecurityTest {
     @Test
     void isInDepartmentOfAuthenticatedSSAPersonId() {
         final Person member = new Person("Member", "lastname", "firstName", "email");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(member));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(member));
 
         final String usernameSSA = "SSA";
         final Person ssa = new Person(usernameSSA, "lastname", "firstName", "email");
@@ -57,14 +55,14 @@ class UserApiMethodSecurityTest {
         when(departmentService.isSecondStageAuthorityAllowedToManagePerson(ssa, member)).thenReturn(true);
 
         final Authentication authentication = getAuthenticationToken(usernameSSA);
-        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedSSAPersonId).isTrue();
     }
 
     @Test
     void isNotInDepartmentOfAuthenticatedSSAPersonId() {
         final Person notMember = new Person("Member", "lastname", "firstName", "email");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(notMember));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(notMember));
 
         final String usernameSSA = "SSA";
         final Person departmentHead = new Person(usernameSSA, "lastname", "firstName", "email");
@@ -74,7 +72,7 @@ class UserApiMethodSecurityTest {
         when(departmentService.isSecondStageAuthorityAllowedToManagePerson(departmentHead, notMember)).thenReturn(false);
 
         final Authentication authentication = getAuthenticationToken(usernameSSA);
-        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedSSAPersonId).isFalse();
     }
 
@@ -86,7 +84,7 @@ class UserApiMethodSecurityTest {
         when(personService.getPersonByUsername(usernameSSA)).thenReturn(Optional.of(ssa));
 
         final Authentication authentication = getAuthenticationToken(usernameSSA);
-        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedSSAPersonId).isFalse();
     }
 
@@ -98,13 +96,13 @@ class UserApiMethodSecurityTest {
         when(personService.getPersonByUsername(usernameSSA)).thenReturn(Optional.of(ssa));
 
         final Authentication authentication = getAuthenticationToken(usernameSSA);
-        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedSSAPersonId).isFalse();
     }
 
     @Test
     void isInDepartmentOfAuthenticatedSSAPersonIdButIsNotLoggedIn() {
-        when(personService.getPersonByID(1)).thenReturn(Optional.empty());
+        when(personService.getPersonByID(1L)).thenReturn(Optional.empty());
 
         final String usernameSSA = "ssa";
         final Person ssa = new Person(usernameSSA, "lastname", "firstName", "email");
@@ -112,14 +110,14 @@ class UserApiMethodSecurityTest {
         when(personService.getPersonByUsername(usernameSSA)).thenReturn(Optional.of(ssa));
 
         final Authentication authentication = getAuthenticationToken(usernameSSA);
-        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedSSAPersonId = sut.isInDepartmentOfSecondStageAuthority(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedSSAPersonId).isFalse();
     }
 
     @Test
     void isInDepartmentOfAuthenticatedHeadPersonId() {
         final Person member = new Person("Member", "lastname", "firstName", "email");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(member));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(member));
 
         final String usernameDepartmentHead = "Head";
         final Person departmentHead = new Person(usernameDepartmentHead, "lastname", "firstName", "email");
@@ -129,14 +127,14 @@ class UserApiMethodSecurityTest {
         when(departmentService.isDepartmentHeadAllowedToManagePerson(departmentHead, member)).thenReturn(true);
 
         final Authentication authentication = getAuthenticationToken(usernameDepartmentHead);
-        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedHeadPersonId).isTrue();
     }
 
     @Test
     void isNotInDepartmentOfAuthenticatedHeadPersonId() {
         final Person notMember = new Person("Member", "lastname", "firstName", "email");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(notMember));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(notMember));
 
         final String usernameDepartmentHead = "Head";
         final Person departmentHead = new Person(usernameDepartmentHead, "lastname", "firstName", "email");
@@ -146,7 +144,7 @@ class UserApiMethodSecurityTest {
         when(departmentService.isDepartmentHeadAllowedToManagePerson(departmentHead, notMember)).thenReturn(false);
 
         final Authentication authentication = getAuthenticationToken(usernameDepartmentHead);
-        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedHeadPersonId).isFalse();
     }
 
@@ -158,7 +156,7 @@ class UserApiMethodSecurityTest {
         when(personService.getPersonByUsername(usernameDepartmentHead)).thenReturn(Optional.of(departmentHead));
 
         final Authentication authentication = getAuthenticationToken(usernameDepartmentHead);
-        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedHeadPersonId).isFalse();
     }
 
@@ -170,13 +168,13 @@ class UserApiMethodSecurityTest {
         when(personService.getPersonByUsername(usernameDepartmentHead)).thenReturn(Optional.of(departmentHead));
 
         final Authentication authentication = getAuthenticationToken(usernameDepartmentHead);
-        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedHeadPersonId).isFalse();
     }
 
     @Test
     void isInDepartmentOfAuthenticatedHeadPersonIdButIsNotLoggedIn() {
-        when(personService.getPersonByID(1)).thenReturn(Optional.empty());
+        when(personService.getPersonByID(1L)).thenReturn(Optional.empty());
 
         final String usernameDepartmentHead = "Head";
         final Person departmentHead = new Person(usernameDepartmentHead, "lastname", "firstName", "email");
@@ -184,16 +182,16 @@ class UserApiMethodSecurityTest {
         when(personService.getPersonByUsername(usernameDepartmentHead)).thenReturn(Optional.of(departmentHead));
 
         final Authentication authentication = getAuthenticationToken(usernameDepartmentHead);
-        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1);
+        final boolean inDepartmentOfAuthenticatedHeadPersonId = sut.isInDepartmentOfDepartmentHead(authentication, 1L);
         assertThat(inDepartmentOfAuthenticatedHeadPersonId).isFalse();
     }
 
     @Test
     void isSamePersonIdNoPerson() {
 
-        when(personService.getPersonByID(1)).thenReturn(Optional.empty());
+        when(personService.getPersonByID(1L)).thenReturn(Optional.empty());
 
-        final boolean isSamePerson = sut.isSamePersonId(mock(Authentication.class), 1);
+        final boolean isSamePerson = sut.isSamePersonId(mock(Authentication.class), 1L);
         assertThat(isSamePerson).isFalse();
     }
 
@@ -203,10 +201,10 @@ class UserApiMethodSecurityTest {
         final String username = "Hans";
         final TestingAuthenticationToken authentication = getAuthenticationToken(username);
 
-        when(personService.getPersonByID(1))
+        when(personService.getPersonByID(1L))
             .thenReturn(Optional.of(new Person(username, "lastname", "firstName", "email")));
 
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
+        final boolean isSamePerson = sut.isSamePersonId(authentication, 1L);
         assertThat(isSamePerson).isTrue();
     }
 
@@ -214,86 +212,9 @@ class UserApiMethodSecurityTest {
     void isNotSamePersonIdWithOidc() {
         final String username = "Hans";
         final Authentication authentication = getAuthenticationToken(username);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person("differentUsername", "lastname", "firstName", "email")));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(new Person("differentUsername", "lastname", "firstName", "email")));
 
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
-        assertThat(isSamePerson).isFalse();
-    }
-
-    @Test
-    void isSamePersonIdWithSimpleAuthentication() {
-
-        final String username = "Hans";
-        final User user = new User(username, "password", List.of());
-        final TestingAuthenticationToken authentication = new TestingAuthenticationToken(user, List.of());
-
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person(username, "lastname", "firstName", "email")));
-
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
-        assertThat(isSamePerson).isTrue();
-    }
-
-    @Test
-    void isDifferentPersonIdWithSimpleAuthentication() {
-
-        final User user = new User("username", "password", List.of());
-        final TestingAuthenticationToken authentication = new TestingAuthenticationToken(user, List.of());
-
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person("differentUsername", "lastname", "firstName", "email")));
-
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
-        assertThat(isSamePerson).isFalse();
-    }
-
-    @Test
-    void isDifferentPersonIdCaseSensitiveWithSimpleAuthentication() {
-
-        final User user = new User("Username", "password", List.of());
-        final TestingAuthenticationToken authentication = new TestingAuthenticationToken(user, List.of());
-
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person("username", "lastname", "firstName", "email")));
-
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
-        assertThat(isSamePerson).isFalse();
-    }
-
-    @Test
-    void isSamePersonIdWithLdap() {
-
-        final String username = "Hans";
-        final org.springframework.security.ldap.userdetails.Person ldapUser = mock(org.springframework.security.ldap.userdetails.Person.class);
-        final TestingAuthenticationToken authentication = new TestingAuthenticationToken(ldapUser, List.of());
-
-        when(ldapUser.getUsername()).thenReturn(username);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person(username, "lastname", "firstName", "email")));
-
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
-        assertThat(isSamePerson).isTrue();
-    }
-
-    @Test
-    void isDifferentPersonIdWithLdap() {
-
-        final org.springframework.security.ldap.userdetails.Person ldapUser = mock(org.springframework.security.ldap.userdetails.Person.class);
-        final TestingAuthenticationToken authentication = new TestingAuthenticationToken(ldapUser, List.of());
-
-        when(ldapUser.getUsername()).thenReturn("username");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person("differentUsername", "lastname", "firstName", "email")));
-
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
-        assertThat(isSamePerson).isFalse();
-    }
-
-    @Test
-    void isDifferentPersonIdCaseSensitiveWithLdap() {
-
-        final org.springframework.security.ldap.userdetails.Person ldapUser = mock(org.springframework.security.ldap.userdetails.Person.class);
-        final TestingAuthenticationToken authentication = new TestingAuthenticationToken(ldapUser, List.of());
-
-        when(ldapUser.getUsername()).thenReturn("Username");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person("username", "lastname", "firstName", "email")));
-
-        final boolean isSamePerson = sut.isSamePersonId(authentication, 1);
+        final boolean isSamePerson = sut.isSamePersonId(authentication, 1L);
         assertThat(isSamePerson).isFalse();
     }
 

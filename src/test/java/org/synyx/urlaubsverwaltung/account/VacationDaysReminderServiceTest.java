@@ -21,6 +21,7 @@ import java.util.Optional;
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.TEN;
 import static java.math.BigDecimal.ZERO;
+import static java.util.Locale.GERMAN;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.Mockito.verify;
@@ -51,7 +52,7 @@ class VacationDaysReminderServiceTest {
         when(personService.getActivePersons()).thenReturn(List.of(person));
 
         final Account account = new Account();
-        account.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account));
 
         sut.remindForCurrentlyLeftVacationDays();
@@ -105,7 +106,7 @@ class VacationDaysReminderServiceTest {
 
         final Account account = new Account();
         account.setDoRemainingVacationDaysExpireGlobally(true);
-        account.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account));
         when(vacationDaysService.calculateTotalLeftVacationDays(account)).thenReturn(TEN);
 
@@ -117,9 +118,9 @@ class VacationDaysReminderServiceTest {
         assertThat(capturedMail.getMailAddressRecipients()).contains(List.of(person));
         assertThat(capturedMail.getSubjectMessageKey()).isEqualTo("subject.account.remindForCurrentlyLeftVacationDays");
         assertThat(capturedMail.getTemplateName()).isEqualTo("account_cron_currently_left_vacation_days");
-        assertThat(capturedMail.getTemplateModel()).contains(
+        assertThat(capturedMail.getTemplateModel(GERMAN)).contains(
             entry("recipientNiceName", "Marlene Muster"),
-            entry("personId", 42),
+            entry("personId", 42L),
             entry("vacationDaysLeft", TEN),
             entry("nextYear", 2023)
         );
@@ -136,12 +137,12 @@ class VacationDaysReminderServiceTest {
 
         final Account account2022 = new Account();
         account2022.setDoRemainingVacationDaysExpireLocally(true);
-        account2022.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         final Account account2023 = new Account();
         account2023.setDoRemainingVacationDaysExpireLocally(true);
-        account2023.setExpiryDate(LocalDate.of(2023, 4, 1));
+        account2023.setExpiryDateLocally(LocalDate.of(2023, 4, 1));
         when(accountService.getHolidaysAccount(2023, person)).thenReturn(Optional.of(account2023));
 
         final VacationDaysLeft vacationDaysLeft = VacationDaysLeft.builder()
@@ -168,12 +169,12 @@ class VacationDaysReminderServiceTest {
 
         final Account account2022 = new Account();
         account2022.setDoRemainingVacationDaysExpireLocally(true);
-        account2022.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         final Account account2023 = new Account();
         account2023.setDoRemainingVacationDaysExpireLocally(true);
-        account2023.setExpiryDate(LocalDate.of(2023, 4, 1));
+        account2023.setExpiryDateLocally(LocalDate.of(2023, 4, 1));
         when(accountService.getHolidaysAccount(2023, person)).thenReturn(Optional.of(account2023));
 
         final VacationDaysLeft vacationDaysLeft = VacationDaysLeft.builder()
@@ -193,9 +194,9 @@ class VacationDaysReminderServiceTest {
         assertThat(capturedMail.getMailAddressRecipients()).contains(List.of(person));
         assertThat(capturedMail.getSubjectMessageKey()).isEqualTo("subject.account.remindForRemainingVacationDays");
         assertThat(capturedMail.getTemplateName()).isEqualTo("account_cron_remind_remaining_vacation_days");
-        assertThat(capturedMail.getTemplateModel()).contains(
+        assertThat(capturedMail.getTemplateModel(GERMAN)).contains(
             entry("recipientNiceName", "Marlene Muster"),
-            entry("personId", 42),
+            entry("personId", 42L),
             entry("remainingVacationDays", TEN),
             entry("dayBeforeExpiryDate", LocalDate.of(2022, 3, 31))
         );
@@ -212,7 +213,7 @@ class VacationDaysReminderServiceTest {
 
         final Account account2022 = new Account();
         account2022.setPerson(person);
-        account2022.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         sut.notifyForExpiredRemainingVacationDays();
@@ -230,7 +231,7 @@ class VacationDaysReminderServiceTest {
 
         final Account account2022 = new Account();
         account2022.setPerson(person);
-        account2022.setExpiryDate(LocalDate.of(2022, 4, 2));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 2));
         account2022.setExpiryNotificationSentDate(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
@@ -250,12 +251,12 @@ class VacationDaysReminderServiceTest {
 
         final Account account2022 = new Account();
         account2022.setDoRemainingVacationDaysExpireLocally(true);
-        account2022.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         final Account account2023 = new Account();
         account2023.setDoRemainingVacationDaysExpireLocally(true);
-        account2023.setExpiryDate(LocalDate.of(2023, 4, 1));
+        account2023.setExpiryDateLocally(LocalDate.of(2023, 4, 1));
         when(accountService.getHolidaysAccount(2023, person)).thenReturn(Optional.of(account2023));
 
         final VacationDaysLeft vacationDaysLeft = VacationDaysLeft.builder()
@@ -301,12 +302,12 @@ class VacationDaysReminderServiceTest {
 
         final Account account2022 = new Account();
         account2022.setDoRemainingVacationDaysExpireLocally(true);
-        account2022.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         final Account account2023 = new Account();
         account2023.setDoRemainingVacationDaysExpireLocally(true);
-        account2023.setExpiryDate(LocalDate.of(2023, 4, 1));
+        account2023.setExpiryDateLocally(LocalDate.of(2023, 4, 1));
         when(accountService.getHolidaysAccount(2023, person)).thenReturn(Optional.of(account2023));
 
         final VacationDaysLeft vacationDaysLeft = VacationDaysLeft.builder()
@@ -327,9 +328,9 @@ class VacationDaysReminderServiceTest {
         assertThat(capturedMail.getMailAddressRecipients()).contains(List.of(person));
         assertThat(capturedMail.getSubjectMessageKey()).isEqualTo("subject.account.notifyForExpiredRemainingVacationDays");
         assertThat(capturedMail.getTemplateName()).isEqualTo("account_cron_expired_remaining_vacation_days");
-        assertThat(capturedMail.getTemplateModel()).contains(
+        assertThat(capturedMail.getTemplateModel(GERMAN)).contains(
             entry("recipientNiceName", "Marlene Muster"),
-            entry("personId", 42),
+            entry("personId", 42L),
             entry("expiredRemainingVacationDays", BigDecimal.valueOf(9L)),
             entry("totalLeftVacationDays", BigDecimal.valueOf(11L)),
             entry("remainingVacationDaysNotExpiring", ONE),
@@ -341,7 +342,7 @@ class VacationDaysReminderServiceTest {
         final Person person = new Person();
         person.setFirstName("Marlene");
         person.setLastName("Muster");
-        person.setId(42);
+        person.setId(42L);
         return person;
     }
 }

@@ -4,6 +4,7 @@ import de.focus_shift.launchpad.api.HasLaunchpad;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.SortDefault;
@@ -29,6 +30,7 @@ import java.time.Year;
 import java.util.List;
 import java.util.Locale;
 
+import static java.lang.Integer.MAX_VALUE;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.temporal.TemporalAdjusters.lastDayOfYear;
 import static org.springframework.http.HttpStatus.OK;
@@ -60,15 +62,14 @@ class ApplicationForLeaveExportViewController implements HasLaunchpad {
     @PreAuthorize(IS_PRIVILEGED_USER)
     @GetMapping(value = "/export")
     public ResponseEntity<ByteArrayResource> downloadCsvExport(
-        @SortDefault.SortDefaults({@SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC)})
-        Pageable pageable,
         @RequestParam(value = "from", defaultValue = "") String from,
         @RequestParam(value = "to", defaultValue = "") String to,
+        @RequestParam(value = "allElements", defaultValue = "false") boolean allElements,
         @RequestParam(value = "query", required = false, defaultValue = "") String query,
+        @SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC) Pageable pageable,
         Locale locale
     ) {
         final FilterPeriod period = toFilterPeriod(from, to, locale);
-        final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageable, query);
 
         // NOTE: Not supported at the moment
         if (period.getStartDate().getYear() != period.getEndDate().getYear()) {
@@ -77,15 +78,19 @@ class ApplicationForLeaveExportViewController implements HasLaunchpad {
 
         final Person signedInUser = personService.getSignedInUser();
 
+        final Pageable adaptedPageable = allElements ? PageRequest.of(0, MAX_VALUE, pageable.getSort()) : pageable;
+        final String adaptedQuery = allElements ? "" : query;
+        final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(adaptedPageable, adaptedQuery);
+
         final Page<ApplicationForLeaveExport> exportPage = applicationForLeaveExportService.getAll(signedInUser, period.getStartDate(), period.getEndDate(), pageableSearchQuery);
         final List<ApplicationForLeaveExport> export = exportPage.getContent();
         final CSVFile csvFile = applicationForLeaveCsvExportService.generateCSV(period, locale, export);
 
         final HttpHeaders headers = new HttpHeaders();
         headers.setContentType(new MediaType("text", "csv", UTF_8));
-        headers.setContentDisposition(ContentDisposition.builder("attachment").filename(csvFile.getFileName(), UTF_8).build());
+        headers.setContentDisposition(ContentDisposition.builder("attachment").filename(csvFile.fileName(), UTF_8).build());
 
-        return ResponseEntity.status(OK).headers(headers).body(csvFile.getResource());
+        return ResponseEntity.status(OK).headers(headers).body(csvFile.resource());
     }
 
     private FilterPeriod toFilterPeriod(String startDateString, String endDateString, Locale locale) {

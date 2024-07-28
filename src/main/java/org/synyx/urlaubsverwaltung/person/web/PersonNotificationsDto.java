@@ -2,7 +2,7 @@ package org.synyx.urlaubsverwaltung.person.web;
 
 public class PersonNotificationsDto {
 
-    private Integer personId;
+    private Long personId;
 
     /**
      * Whether all personal related notifications are active or not.
@@ -31,16 +31,20 @@ public class PersonNotificationsDto {
     private PersonNotificationDto overtimeAppliedByManagement;
     private PersonNotificationDto overtimeApplied;
     private PersonNotificationDto absenceForColleagues;
+    private PersonNotificationDto ownSickNoteSubmittedCreatedEditedCancelled;
+    private PersonNotificationDto sickNoteCreatedByManagementForManagement;
+    private PersonNotificationDto sickNoteSubmittedByUserForManagement;
+    private PersonNotificationDto sickNoteAcceptedByManagementForManagement;
 
     PersonNotificationsDto() {
         // ok
     }
 
-    public Integer getPersonId() {
+    public Long getPersonId() {
         return personId;
     }
 
-    public void setPersonId(Integer personId) {
+    public void setPersonId(Long personId) {
         this.personId = personId;
     }
 
@@ -91,9 +95,11 @@ public class PersonNotificationsDto {
     public void setApplicationAllowedForManagement(PersonNotificationDto applicationAllowedForManagement) {
         this.applicationAllowedForManagement = applicationAllowedForManagement;
     }
+
     public PersonNotificationDto getApplicationCancellationForManagement() {
         return applicationCancellationForManagement;
     }
+
     public void setApplicationCancellationForManagement(PersonNotificationDto applicationCancellationForManagement) {
         this.applicationCancellationForManagement = applicationCancellationForManagement;
     }
@@ -192,5 +198,37 @@ public class PersonNotificationsDto {
 
     public void setAbsenceForColleagues(PersonNotificationDto absenceForColleagues) {
         this.absenceForColleagues = absenceForColleagues;
+    }
+
+    public PersonNotificationDto getOwnSickNoteSubmittedCreatedEditedCancelled() {
+        return ownSickNoteSubmittedCreatedEditedCancelled;
+    }
+
+    public void setOwnSickNoteSubmittedCreatedEditedCancelled(PersonNotificationDto ownSickNoteSubmittedCreatedEditedCancelled) {
+        this.ownSickNoteSubmittedCreatedEditedCancelled = ownSickNoteSubmittedCreatedEditedCancelled;
+    }
+
+    public PersonNotificationDto getSickNoteCreatedByManagementForManagement() {
+        return sickNoteCreatedByManagementForManagement;
+    }
+
+    public void setSickNoteCreatedByManagementForManagement(PersonNotificationDto sickNoteCreatedByManagementForManagement) {
+        this.sickNoteCreatedByManagementForManagement = sickNoteCreatedByManagementForManagement;
+    }
+
+    public PersonNotificationDto getSickNoteSubmittedByUserForManagement() {
+        return sickNoteSubmittedByUserForManagement;
+    }
+
+    public void setSickNoteSubmittedByUserForManagement(PersonNotificationDto sickNoteSubmittedByUserForManagement) {
+        this.sickNoteSubmittedByUserForManagement = sickNoteSubmittedByUserForManagement;
+    }
+
+    public PersonNotificationDto getSickNoteAcceptedByManagementForManagement() {
+        return sickNoteAcceptedByManagementForManagement;
+    }
+
+    public void setSickNoteAcceptedByManagementForManagement(PersonNotificationDto sickNoteAcceptedByManagementForManagement) {
+        this.sickNoteAcceptedByManagementForManagement = sickNoteAcceptedByManagementForManagement;
     }
 }

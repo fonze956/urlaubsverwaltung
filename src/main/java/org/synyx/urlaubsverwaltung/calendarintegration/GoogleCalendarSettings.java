@@ -1,28 +1,24 @@
 package org.synyx.urlaubsverwaltung.calendarintegration;
 
-import javax.persistence.Column;
-import javax.persistence.Embeddable;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+
 import java.util.Objects;
 
-
-/**
- * Settings to sync absences with a Google calendar.
- */
-@Deprecated(since = "4.0.0", forRemoval = true)
 @Embeddable
 public class GoogleCalendarSettings {
 
-    @Column(name = "calendar_google_client_id")
-    private String clientId;
+    @Column(name = "google_client_id")
+    private String clientId = null;
 
-    @Column(name = "calendar_google_client_secret")
-    private String clientSecret;
+    @Column(name = "google_client_secret")
+    private String clientSecret = null;
 
-    @Column(name = "calendar_google_calendar_id")
-    private String calendarId;
+    @Column(name = "google_calendar_id")
+    private String calendarId = null;
 
-    @Column(name = "calendar_google_refresh_token")
-    private String refreshToken;
+    @Column(name = "google_refresh_token")
+    private String refreshToken = null;
 
     public String getRefreshToken() {
         return refreshToken;

@@ -1,25 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
-  <head th:replace="_layout::head(~{::title}, ~{::styles}, ~{::scripts})">
+  <head
+    th:replace="~{_layout::head(title=~{::title}, scripts=~{::scripts}, scriptsDefer=~{::scriptsDefer}, preload=~{::preload})}"
+  >
     <title
       th:text="${applicationForLeaveForm.id == null} ? #{application.data.header.title.new} : #{application.data.header.title.edit}"
     >
       Neue Abwesenheit
     </title>
-    <th:block th:fragment="styles">
-      <link
-        rel="stylesheet"
-        type="text/css"
-        asset:href="account_form~app_form~app_statistics~overtime_form~sick_note_form~sick_notes~workingtime_form.css"
-      />
-      <link
-        rel="stylesheet"
-        type="text/css"
-        asset:href="account_form~app_form~app_statistics~overtime_form~person_overview~sick_note_form~sick_notes~workingtime_form.css"
-      />
-      <link rel="stylesheet" type="text/css" asset:href="npm.timepicker.css" />
-      <link rel="stylesheet" type="text/css" asset:href="npm.duetds.css" />
-    </th:block>
     <th:block th:fragment="scripts">
       <script th:inline="javascript">
         /*<![CDATA[*/
@@ -41,28 +29,17 @@
         window.uv.i18n["application.applier.days"] = /*[[#{application.applier.days}]]*/ "application.applier.days";
         /*]]>*/
       </script>
-      <script defer asset:src="npm.duetds.js"></script>
-      <script defer asset:src="npm.date-fns.js"></script>
-      <script defer asset:src="npm.timepicker.js"></script>
-      <script defer asset:src="app_detail~app_form~person_overview.js"></script>
-      <script defer asset:src="app_form.js"></script>
-      <script
-        defer
-        asset:src="account_form~app_form~app_statistics~overtime_form~sick_note_form~sick_notes~workingtime_form.js"
-      ></script>
-      <script
-        defer
-        asset:src="account_form~app_form~app_statistics~overtime_form~person_overview~sick_note_form~sick_notes~workingtime_form.js"
-      ></script>
-      <script
-        defer
-        asset:src="account_form~app_detail~app_form~app_statistics~common~overtime_form~person_overview~sick_note_form~~ac852a85.js"
-      ></script>
-      <script th:replace="fragments/datepicker-localization"></script>
-      <script th:replace="fragments/vacation-type-colors-script :: vacation-type-colors-script"></script>
+      <script th:replace="~{fragments/datepicker-localization :: datepicker-localization}"></script>
+      <script th:replace="~{fragments/vacation-type-colors-script :: vacation-type-colors-script}"></script>
+    </th:block>
+    <th:block th:fragment="preload">
+      <link rel="preload" th:replace="~{fragments/asset-dependency-preload::links('app_form.js')}" />
+    </th:block>
+    <th:block th:fragment="scriptsDefer">
+      <script defer type="module" asset:src="app_form.js"></script>
     </th:block>
   </head>
-  <body th:replace="_layout::body(~{::main}, ~{})">
+  <body th:replace="~{_layout::body(~{::main}, ~{})}">
     <main th:fragment="main" class="tw-max-w-2xl lg:tw-max-w-6xl tw-mx-auto tw-px-4 lg:tw-px-12 xl:tw-px-0">
       <th:block th:if="${noHolidaysAccount == true}" th:text="#{application.applier.account.none}" />
 
@@ -70,7 +47,7 @@
         <form
           id="applicationForm"
           method="post"
-          th:with="actionUrl=${applicationForLeaveForm.id == null ? '/web/application' : '/web/application/__${applicationForLeaveForm.id}__'}"
+          th:with="actionUrl=${applicationForLeaveForm.id == null ? '/web/application' : '/web/application/__${applicationForLeaveForm.id}__/edit'}"
           th:action="@{__${actionUrl}__}"
           th:object="${applicationForLeaveForm}"
           class="form-horizontal"
@@ -81,7 +58,7 @@
           <p class="alert alert-danger" th:if="${#fields.hasGlobalErrors()}" th:errors="*{global}"></p>
 
           <div class="form-section tw-mb-8">
-            <div th:replace="fragments/section-heading::section-heading(~{::application-form-heading-body}, ~{})">
+            <div th:replace="~{fragments/section-heading::section-heading(~{::application-form-heading-body}, ~{})}">
               <th:block th:ref="application-form-heading-body">
                 <h2
                   th:text="${applicationForLeaveForm.id == null} ? #{application.data.title.new}: #{application.data.title.edit}"
@@ -99,7 +76,7 @@
                   <div class="col-md-9">
                     <th:block th:if="${applicationForLeaveForm.id == null}">
                       <select
-                        th:replace="fragments/select::one(id='person-select', name='person', options=~{::application-person-select-options})"
+                        th:replace="~{fragments/select::one(id='person-select', name='person', options=~{::application-person-select-options})}"
                         id="person-select"
                       >
                         <th:block th:fragment="application-person-select-options">
@@ -120,6 +97,9 @@
                   </div>
                 </div>
                 <th:block th:if="${not canAddApplicationForLeaveForAnotherUser}">
+                  <th:block th:if="${applicationForLeaveForm.id != null}">
+                    <input type="hidden" th:field="*{id}" />
+                  </th:block>
                   <input type="hidden" name="person" th:value="${person.id}" />
                 </th:block>
               </div>
@@ -137,15 +117,15 @@
                   </label>
                   <div class="col-md-9">
                     <select
-                      th:replace="fragments/select::one(id='vacationType', name='vacationType', options=~{::application-vacationtype-select-options}, testId='vacation-type-select', is='uv-vacation-type-select')"
+                      th:replace="~{fragments/select::one(id='vacationType', name='vacationType.id', options=~{::application-vacationtype-select-options}, testId='vacation-type-select', is='uv-vacation-type-select')}"
                       id="vacationType"
                     >
                       <th:block th:fragment="application-vacationtype-select-options">
                         <option
                           th:each="vacationType: ${vacationTypes}"
-                          th:text="#{__${vacationType.messageKey}__}"
+                          th:text="${vacationType.label}"
                           th:value="${vacationType.id}"
-                          th:selected="${applicationForLeaveForm.vacationType != null && applicationForLeaveForm.vacationType.id == vacationType.id}"
+                          th:selected="${applicationForLeaveForm.vacationType?.id == vacationType.id}"
                           th:data-vacationtype-category="${vacationType.category.name}"
                         ></option>
                       </th:block>
@@ -174,6 +154,7 @@
                     <p
                       class="tw-mt-1 tw-text-sm tw-text-red-800 dark:tw-text-red-400"
                       th:if="${#fields.hasErrors('startDate')}"
+                      data-test-id="from-error"
                     >
                       <th:block th:errors="*{startDate}">startDate Error</th:block>
                     </p>
@@ -212,6 +193,7 @@
                     <p
                       class="tw-mt-1 tw-text-sm tw-text-red-800 dark:tw-text-red-400"
                       th:if="${#fields.hasErrors('endDate')}"
+                      data-test-id="to-error"
                     >
                       <th:block th:errors="*{endDate}">endDate Error</th:block>
                     </p>
@@ -293,14 +275,14 @@
             <div
               th:if="${overtimeActive}"
               class="row"
-              th:classappend="${applicationForLeaveForm.vacationType != null && applicationForLeaveForm.vacationType.category.name == 'OVERTIME' ? '' : 'hidden'}"
+              th:classappend="${applicationForLeaveForm.vacationType?.category?.name == 'OVERTIME' ? '' : 'hidden'}"
               id="overtime"
             >
               <div class="col-md-8">
                 <div class="form-group is-required" id="form-group--hours">
                   <label th:text="|#{application.data.hours}:|" class="control-label col-md-3" for="hours"> </label>
                   <div class="col-md-9">
-                    <th:block th:replace="overtime/hour-and-minute-input::hour-and-minute-input"></th:block>
+                    <th:block th:replace="~{overtime/hour-and-minute-input::hour-and-minute-input}"></th:block>
                   </div>
                 </div>
               </div>
@@ -309,7 +291,7 @@
             <!-- Special Leave Information -->
             <div
               class="row"
-              th:classappend="${applicationForLeaveForm.vacationType != null && applicationForLeaveForm.vacationType.category.name == 'SPECIALLEAVE' ? '' : 'hidden'}"
+              th:classappend="${applicationForLeaveForm.vacationType?.category?.name == 'SPECIALLEAVE' ? '' : 'hidden'}"
               id="special-leave"
             >
               <div class="col-md-8">
@@ -328,10 +310,12 @@
                       th:errorclass="error"
                       onkeyup="count(this.value, 'text-reason-counter');"
                       onkeydown="maxChars(this,200); count(this.value, 'text-reason-counter');"
+                      data-test-id="reason"
                     ></textarea>
                     <p
                       class="tw-mt-1 tw-text-sm tw-text-red-800 dark:tw-text-red-400"
                       th:if="${#fields.hasErrors('reason')}"
+                      data-test-id="reason-error"
                     >
                       <th:block th:errors="*{reason}">reason Error</th:block>
                     </p>
@@ -340,7 +324,7 @@
               </div>
               <div class="col-md-6 col-md-push-2">
                 <span class="help-block tw-text-sm">
-                  <svg th:replace="icon/info::svg(className='tw-w-4 tw-h-4')"></svg>
+                  <svg th:replace="~{icon/info::svg(className='tw-w-4 tw-h-4')}"></svg>
                   <th:block th:text="#{application.data.specialleave.description}"></th:block>
                   <ul>
                     <li
@@ -355,7 +339,7 @@
 
           <div class="form-section tw-mb-16">
             <div
-              th:replace="fragments/section-heading::section-heading(~{::application-further-information-heading-body}, ~{})"
+              th:replace="~{fragments/section-heading::section-heading(~{::application-further-information-heading-body}, ~{})}"
             >
               <th:block th:ref="application-further-information-heading-body">
                 <h2 th:text="#{application.data.furtherInformation.title}">Weitere Informationen</h2>
@@ -396,7 +380,7 @@
                   <div class="col-md-9">
                     <div class="tw-flex">
                       <select
-                        th:replace="fragments/select::one-with-addon(id='holiday-replacement-select', name='holidayReplacementToAdd', options=~{::application-holidayreplacement-select-options}, addon=~{::application-holidayreplacement-select-addon}, testId='holiday-replacement-select')"
+                        th:replace="~{fragments/select::one-with-addon(id='holiday-replacement-select', name='holidayReplacementToAdd', options=~{::application-holidayreplacement-select-options}, addon=~{::application-holidayreplacement-select-addon}, testId='holiday-replacement-select')}"
                         id="holiday-replacement-select"
                       >
                         <th:block th:fragment="application-holidayreplacement-select-options">
@@ -441,7 +425,7 @@
                           <div class="tw-flex">
                             <span class="tw-text-blue-50 dark:tw-text-sky-800 tw-mr-4 tw-mt-1">
                               <img
-                                th:replace="fragments/avatar::avatar-bordered(url=${holidayReplacement.person.gravatarURL + '?d=404&s=40'},niceName=${holidayReplacement.person.niceName},width='40px',height='40px',personId=${holidayReplacement.person.id})"
+                                th:replace="~{fragments/avatar::avatar-bordered(url=${holidayReplacement.person.gravatarURL + '?d=404&s=40'},niceName=${holidayReplacement.person.niceName},width='40px',height='40px',personId=${holidayReplacement.person.id})}"
                                 alt=""
                               />
                             </span>
@@ -471,12 +455,12 @@
                                   name="remove-holiday-replacement"
                                   th:value="${holidayReplacement.person.id}"
                                   formmethod="post"
-                                  th:formaction="${applicationForLeaveForm.id == null ? '/web/application/new' : '/web/application/__${applicationForLeaveForm.id}__'}"
+                                  th:formaction="${applicationForLeaveForm.id == null ? '/web/application/new' : '/web/application/__${applicationForLeaveForm.id}__/edit'}"
                                 >
                                   <span
                                     class="tw-flex tw-items-center tw-text-sm tw-text-black tw-text-opacity-50 hover:tw-text-opacity-100 focus:tw-text-opacity-100 dark:tw-text-zinc-200 tw-transition-colors"
                                   >
-                                    <svg th:replace="icon/trash-2::svg(className='tw-w-4 tw-h-4 tw-mr-0.5')"></svg>
+                                    <svg th:replace="~{icon/trash-2::svg(className='tw-w-4 tw-h-4 tw-mr-0.5')}"></svg>
                                     <th:block
                                       th:text="#{application.data.holidayReplacement.remove-button.text}"
                                     ></th:block>
@@ -607,20 +591,18 @@
             </div>
           </div>
 
-          <div class="form-section tw-mb-12">
-            <hr />
+          <hr class="tw-w-full tw-m-0 tw-mt-6" />
+
+          <div class="tw-mt-6 tw-flex tw-justify-between tw-gap-4">
             <button
               id="apply-application"
-              th:text="${applicationForLeaveForm.id == null} ? #{action.apply.vacation}: #{action.apply.vacation.edit}"
               type="submit"
-              class="button-main-green pull-left col-xs-12 col-sm-5 col-md-2"
-            ></button>
-            <button
-              type="button"
-              th:text="#{action.cancel}"
-              class="button col-xs-12 col-sm-5 col-md-2 pull-right"
-              data-back-button
-            ></button>
+              class="button-main-green tw-w-56"
+              th:text="${applicationForLeaveForm.id == null} ? #{action.apply.vacation}: #{action.apply.vacation.edit}"
+            >
+              Neue Abwesenheit
+            </button>
+            <button data-back-button th:text="#{action.cancel}" type="button" class="button">Abbrechen</button>
           </div>
         </form>
       </th:block>

@@ -13,36 +13,42 @@ import {
   isValid as isValidDate,
   isWeekend,
   isWithinInterval,
-  parse,
-  parseISO,
+  parseISO as dateFnsParseISO,
   startOfMonth,
   startOfYear,
   subMonths,
 } from "date-fns";
 import format from "../../lib/date-fns/format";
+import parse from "../../lib/date-fns/parse";
 import startOfWeek from "../../lib/date-fns/start-of-week";
 import tooltip from "../tooltip";
 import { getJSON } from "../../js/fetch";
 import {
   isNoWorkday,
+  isPersonalHolidayApprovedFull,
+  isPersonalHolidayApprovedMorning,
+  isPersonalHolidayApprovedNoon,
+  isPersonalHolidayCancellationRequestedFull,
+  isPersonalHolidayCancellationRequestedMorning,
+  isPersonalHolidayCancellationRequestedNoon,
+  isPersonalHolidayTemporaryFull,
+  isPersonalHolidayTemporaryMorning,
+  isPersonalHolidayTemporaryNoon,
+  isPersonalHolidayWaitingFull,
+  isPersonalHolidayWaitingMorning,
+  isPersonalHolidayWaitingNoon,
+  isSickNoteActiveFull,
+  isSickNoteActiveMorning,
+  isSickNoteActiveNoon,
+  isSickNoteFull,
   isSickNoteMorning,
   isSickNoteNoon,
-  isSickNoteFull,
-  isPersonalHolidayWaitingFull,
-  isPersonalHolidayTemporaryFull,
-  isPersonalHolidayApprovedFull,
-  isPersonalHolidayCancellationRequestedFull,
-  isPersonalHolidayWaitingMorning,
-  isPersonalHolidayTemporaryMorning,
-  isPersonalHolidayApprovedMorning,
-  isPersonalHolidayCancellationRequestedMorning,
-  isPersonalHolidayWaitingNoon,
-  isPersonalHolidayApprovedNoon,
-  isPersonalHolidayCancellationRequestedNoon,
-  isPersonalHolidayTemporaryNoon,
+  isSickNoteWaitingFull,
+  isSickNoteWaitingMorning,
+  isSickNoteWaitingNoon,
 } from "../../js/absence";
-import { isPublicHoliday, isPublicHolidayMorning, isPublicHolidayNoon } from "../../js/public-holiday";
 import "./calendar.css";
+import { isPublicHoliday, isPublicHolidayMorning, isPublicHolidayNoon } from "../../js/public-holiday";
 
 function paramize(parameters) {
   return "?" + new URLSearchParams(parameters).toString();
@@ -77,9 +83,12 @@ const CSS = {
   dayPersonalHolidayNoonHalf: "datepicker-day-absence-noon absence-noon--outline-solid-half",
   dayPersonalHolidayNoonSecondHalf: "datepicker-day-absence-noon absence-noon--outline-solid-second-half",
   dayPersonalHolidayNoonApproved: "datepicker-day-absence-noon absence-noon--solid",
-  daySickDayFull: "datepicker-day-sick-note-full",
-  daySickDayMorning: "datepicker-day-sick-note-morning",
-  daySickDayNoon: "datepicker-day-sick-note-noon",
+  daySickDayFullWaiting: "datepicker-day-sick-note-full absence-full--outline",
+  daySickDayFullActive: "datepicker-day-sick-note-full absence-full--solid",
+  daySickDayMorningWaiting: "datepicker-day-sick-note-morning absence-morning--outline",
+  daySickDayMorningActive: "datepicker-day-sick-note-morning absence-morning--solid",
+  daySickDayNoonWaiting: "datepicker-day-sick-note-noon absence-noon--outline",
+  daySickDayNoonActive: "datepicker-day-sick-note-noon absence-noon--solid",
   next: "datepicker-next",
   previous: "datepicker-prev",
   month: "calendar-month-container",
@@ -103,6 +112,11 @@ const icons = {
 
 function getDateFromElement(element) {
   return parseISO(element.dataset[DATA.date]);
+}
+
+function parseISO(dateStringValue) {
+  // date-fns v2.x returned Date(NaN) previously. so just keep using this for falsy argument...
+  return dateStringValue ? dateFnsParseISO(dateStringValue) : new Date(Number.NaN);
 }
 
 const Assertion = (function () {
@@ -179,11 +193,29 @@ const Assertion = (function () {
     isSickDayFull: function (date) {
       return holidayService.isSickDayFull(date);
     },
+    isSickDayFullWaiting: function (date) {
+      return holidayService.isSickDayFullWaiting(date);
+    },
+    isSickDayFullActive: function (date) {
+      return holidayService.isSickDayFullActive(date);
+    },
     isSickDayMorning: function (date) {
       return holidayService.isSickDayMorning(date);
     },
+    isSickDayMorningWaiting: function (date) {
+      return holidayService.isSickDayMorningWaiting(date);
+    },
+    isSickDayMorningActive: function (date) {
+      return holidayService.isSickDayMorningActive(date);
+    },
     isSickDayNoon: function (date) {
       return holidayService.isSickDayNoon(date);
+    },
+    isSickDayNoonWaiting: function (date) {
+      return holidayService.isSickDayNoonWaiting(date);
+    },
+    isSickDayNoonActive: function (date) {
+      return holidayService.isSickDayNoonActive(date);
     },
     title: function (date) {
       return holidayService.getDescription(date);
@@ -194,8 +226,8 @@ const Assertion = (function () {
     absenceType: function (date) {
       return holidayService.getAbsenceType(date);
     },
-    vacationTypeId: function (date) {
-      return holidayService.getVacationTypeId(date);
+    typeId: function (date) {
+      return holidayService.getTypeId(date);
     },
   };
 
@@ -276,12 +308,36 @@ const HolidayService = (function () {
       return isSickNoteFull(getAbsencesForDate(date));
     },
 
+    isSickDayFullWaiting(date) {
+      return isSickNoteWaitingFull(getAbsencesForDate(date));
+    },
+
+    isSickDayFullActive(date) {
+      return isSickNoteActiveFull(getAbsencesForDate(date));
+    },
+
     isSickDayMorning(date) {
       return isSickNoteMorning(getAbsencesForDate(date));
     },
 
+    isSickDayMorningWaiting(date) {
+      return isSickNoteWaitingMorning(getAbsencesForDate(date));
+    },
+
+    isSickDayMorningActive(date) {
+      return isSickNoteActiveMorning(getAbsencesForDate(date));
+    },
+
     isSickDayNoon(date) {
       return isSickNoteNoon(getAbsencesForDate(date));
+    },
+
+    isSickDayNoonWaiting(date) {
+      return isSickNoteWaitingNoon(getAbsencesForDate(date));
+    },
+
+    isSickDayNoonActive(date) {
+      return isSickNoteActiveNoon(getAbsencesForDate(date));
     },
 
     isPersonalHolidayFull(date) {
@@ -363,7 +419,7 @@ const HolidayService = (function () {
     getAbsenceId: function (date) {
       const absences = getAbsencesForDate(date);
       if (absences[0]) {
-        return absences[0].href;
+        return absences[0].id;
       }
       return "-1";
     },
@@ -371,22 +427,22 @@ const HolidayService = (function () {
     getAbsenceType: function (date) {
       const absences = getAbsencesForDate(date);
       if (absences[0]) {
-        return absences[0].type;
+        return absences[0].absenceType;
       }
       return "";
     },
 
-    getVacationTypeId: function (date) {
+    getTypeId: function (date) {
       let morningOrFull;
       let noon;
 
       const absences = getAbsencesForDate(date);
       for (let absence of absences) {
-        if (absence.type === "VACATION") {
-          if (absence.absencePeriodName === "NOON") {
-            noon = absence.vacationTypeId;
+        if (absence.absenceType === "VACATION") {
+          if (absence.absent === "NOON") {
+            noon = absence.typeId;
           } else {
-            morningOrFull = absence.vacationTypeId;
+            morningOrFull = absence.typeId;
           }
         }
       }
@@ -429,8 +485,12 @@ const HolidayService = (function () {
         return Promise.resolve(_CACHE["publicHoliday"][year]);
       }
 
-      const firstDayOfYear = formatISO(startOfYear(parse(year, "yyyy", new Date())), { representation: "date" });
-      const lastDayOfYear = formatISO(endOfYear(parse(year, "yyyy", new Date())), { representation: "date" });
+      const firstDayOfYear = formatISO(startOfYear(parse(year.toString(), "yyyy", new Date())), {
+        representation: "date",
+      });
+      const lastDayOfYear = formatISO(endOfYear(parse(year.toString(), "yyyy", new Date())), {
+        representation: "date",
+      });
 
       return fetch("/persons/" + personId + "/public-holidays", {
         from: firstDayOfYear,
@@ -445,13 +505,17 @@ const HolidayService = (function () {
         return Promise.resolve(_CACHE["absences"][year]);
       }
 
-      const firstDayOfYear = formatISO(startOfYear(parse(year, "yyyy", new Date())), { representation: "date" });
-      const lastDayOfYear = formatISO(endOfYear(parse(year, "yyyy", new Date())), { representation: "date" });
+      const firstDayOfYear = formatISO(startOfYear(parse(year.toString(), "yyyy", new Date())), {
+        representation: "date",
+      });
+      const lastDayOfYear = formatISO(endOfYear(parse(year.toString(), "yyyy", new Date())), {
+        representation: "date",
+      });
 
       return fetch("/persons/" + personId + "/absences", {
         from: firstDayOfYear,
         to: lastDayOfYear,
-        noWorkdaysInclusive: true,
+        "absence-types": "vacation,sick_note,no_workday",
       }).then(cacheAbsences(year));
     },
   };
@@ -492,9 +556,8 @@ const View = (function () {
       '<svg viewBox="0 0 20 20" class="tw-w-3 tw-h-3 tw-opacity-50 tw-stroke-2" fill="currentColor" width="16" height="16" role="img" aria-hidden="true" focusable="false"><path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"></path></svg>',
   };
 
-  // eslint-disable-next-line unicorn/consistent-function-scoping
   function render(tmpl, data) {
-    return tmpl.replace(/{{(\w+)}}/g, function (_, type) {
+    return tmpl.replaceAll(/{{(\w+)}}/g, function (_, type) {
       if (typeof data === "function") {
         return data.apply(this, arguments);
       }
@@ -601,9 +664,12 @@ const View = (function () {
         assert.isPersonalHolidayNoonTemporaryApproved(date) ? CSS.dayPersonalHolidayNoonHalf : "",
         assert.isPersonalHolidayNoonApproved(date) ? CSS.dayPersonalHolidayNoonApproved : "",
         assert.isPersonalHolidayNoonCancellationRequest(date) ? CSS.dayPersonalHolidayNoonSecondHalf : "",
-        assert.isSickDayFull(date) ? CSS.daySickDayFull : "",
-        assert.isSickDayMorning(date) ? CSS.daySickDayMorning : "",
-        assert.isSickDayNoon(date) ? CSS.daySickDayNoon : "",
+        assert.isSickDayFullWaiting(date) ? CSS.daySickDayFullWaiting : "",
+        assert.isSickDayFullActive(date) ? CSS.daySickDayFullActive : "",
+        assert.isSickDayMorningWaiting(date) ? CSS.daySickDayMorningWaiting : "",
+        assert.isSickDayMorningActive(date) ? CSS.daySickDayMorningActive : "",
+        assert.isSickDayNoonWaiting(date) ? CSS.daySickDayNoonWaiting : "",
+        assert.isSickDayNoonActive(date) ? CSS.daySickDayNoonActive : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -611,7 +677,7 @@ const View = (function () {
 
     function style() {
       // could be morning=sick and noon=vacation
-      const [idMorningOrFull, idNoon] = assert.vacationTypeId(date);
+      const [idMorningOrFull, idNoon] = assert.typeId(date);
       const colorMorningOrFull = `var(--absence-color-${window.uv.vacationTypes.colors[idMorningOrFull]})`;
       const colorNoon = `var(--absence-color-${window.uv.vacationTypes.colors[idNoon]})`;
       return [
@@ -634,6 +700,13 @@ const View = (function () {
         assert.isPersonalHolidayNoonTemporaryApproved(date) ? `--absence-bar-color-noon:${colorNoon}` : ``,
         assert.isPersonalHolidayNoonApproved(date) ? `--absence-bar-color-noon:${colorNoon}` : ``,
         assert.isPersonalHolidayNoonCancellationRequest(date) ? `--absence-bar-color-noon:${colorNoon}` : ``,
+
+        assert.isSickDayFullWaiting(date) ? "--absence-bar-color: var(--sick-note-color)" : "",
+        assert.isSickDayFullActive(date) ? "--absence-bar-color: var(--sick-note-color)" : "",
+        assert.isSickDayMorningWaiting(date) ? "--absence-bar-color-morning: var(--sick-note-color)" : "",
+        assert.isSickDayMorningActive(date) ? "--absence-bar-color-morning: var(--sick-note-color)" : "",
+        assert.isSickDayNoonWaiting(date) ? "--absence-bar-color-noon: var(--sick-note-color)" : "",
+        assert.isSickDayNoonActive(date) ? "--absence-bar-color-noon: var(--sick-note-color)" : "",
       ]
         .filter(Boolean)
         .join(";");
@@ -646,14 +719,16 @@ const View = (function () {
       const isPersonalHolidayApproved = assert.isPersonalHolidayFullApproved(date);
       const isPersonalHolidayCancellationRequest = assert.isPersonalHolidayFullCancellationRequest(date);
       const isPersonalHolidayTemporaryApproved = assert.isPersonalHolidayFullTemporaryApproved(date);
-      const isSickDay = assert.isSickDayFull(date);
+      const isSickDayActive = assert.isSickDayFullActive(date);
+      const isSickDayWaiting = assert.isSickDayFullWaiting(date);
 
       if (
         isPersonalHoliday ||
         isPersonalHolidayApproved ||
         isPersonalHolidayTemporaryApproved ||
         isPersonalHolidayCancellationRequest ||
-        isSickDay
+        isSickDayActive ||
+        isSickDayWaiting
       ) {
         return true;
       }
@@ -710,7 +785,7 @@ const View = (function () {
 
       elements[0]?.remove();
 
-      const lastMonthElement = elements[elements.length - 1];
+      const lastMonthElement = elements.at(-1);
       const month = Number(lastMonthElement.dataset[DATA.month]);
       const year = Number(lastMonthElement.dataset[DATA.year]);
 
@@ -725,7 +800,7 @@ const View = (function () {
     displayPrevious: function () {
       const elements = [...rootElement.querySelectorAll("." + CSS.month)];
 
-      elements[elements.length - 1]?.remove();
+      elements.at(-1)?.remove();
 
       const firstMonthElement = elements[0];
       const month = Number(firstMonthElement.dataset[DATA.month]);
@@ -891,7 +966,6 @@ const Controller = (function () {
     }
   }
 
-  // eslint-disable-next-line unicorn/consistent-function-scoping
   function select(element, select) {
     if (!element.dataset[DATA.selectable]) {
       return;

@@ -44,8 +44,10 @@ class MailServiceImplTest {
     void setUp() {
         when(messageSource.getMessage(any(), any(), any())).thenReturn("subject");
         when(emailTemplateEngine.process(any(String.class), any(Context.class))).thenReturn("emailBody");
-        when(mailProperties.getSender()).thenReturn("no-reply@example.org");
-        when(mailProperties.getSenderDisplayName()).thenReturn("Urlaubsverwaltung");
+        when(mailProperties.getFrom()).thenReturn("from@example.org");
+        when(mailProperties.getFromDisplayName()).thenReturn("Urlaubsverwaltung");
+        when(mailProperties.getReplyTo()).thenReturn("no-reply@example.org");
+        when(mailProperties.getReplyToDisplayName()).thenReturn("Urlaubsverwaltung");
         when(mailProperties.getApplicationUrl()).thenReturn("http://localhost:8080");
         sut = new MailServiceImpl(messageSource, emailTemplateEngine, mailSenderService, mailProperties, userSettingsService);
     }
@@ -64,12 +66,12 @@ class MailServiceImplTest {
         final Mail mail = Mail.builder()
             .withRecipient(hans)
             .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
+            .withTemplate(templateName, locale -> new HashMap<>())
             .build();
 
         sut.send(mail);
 
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody");
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody");
     }
 
     @Test
@@ -90,13 +92,13 @@ class MailServiceImplTest {
         final Mail mail = Mail.builder()
             .withRecipient(persons)
             .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
+            .withTemplate(templateName, locale -> new HashMap<>())
             .build();
 
         sut.send(mail);
 
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody");
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody");
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody");
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody");
     }
 
     @Test
@@ -119,14 +121,14 @@ class MailServiceImplTest {
         final Mail mail = Mail.builder()
             .withRecipient(persons)
             .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
+            .withTemplate(templateName, locale -> new HashMap<>())
             .withAttachment("fileName", iCal)
             .build();
 
         sut.send(mail);
 
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
     }
 
     @Test
@@ -149,60 +151,14 @@ class MailServiceImplTest {
         final Mail mail = Mail.builder()
             .withRecipient(persons)
             .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
+            .withTemplate(templateName, locale -> new HashMap<>())
             .withAttachment("fileName", iCal)
             .build();
 
         sut.send(mail);
 
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
-    }
-
-    @Test
-    void sendTechnicalMail() {
-
-        setupMockServletRequest();
-
-        final String subjectMessageKey = "subject.overtime.created";
-        final String templateName = "overtime_office";
-        String to = "admin@example.org";
-        when(mailProperties.getAdministrator()).thenReturn(to);
-
-        final Mail mail = Mail.builder()
-            .withTechnicalRecipient(true)
-            .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
-            .build();
-        sut.send(mail);
-
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", to, "subject", "emailBody");
-    }
-
-    @Test
-    void sendMailToWithPersonsAndAdministrator() {
-
-        when(mailProperties.getAdministrator()).thenReturn("admin@example.org");
-
-        setupMockServletRequest();
-
-        final Person franz = new Person();
-        franz.setEmail("franz@example.org");
-
-        final String subjectMessageKey = "subject.overtime.created";
-        final String templateName = "overtime_office";
-
-        final Mail mail = Mail.builder()
-            .withTechnicalRecipient(true)
-            .withRecipient(List.of(franz))
-            .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
-            .build();
-
-        sut.send(mail);
-
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody");
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "admin@example.org", "subject", "emailBody");
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "hans@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody", List.of(new MailAttachment("fileName", iCal)));
     }
 
     @Test
@@ -219,12 +175,12 @@ class MailServiceImplTest {
         final Mail mail = Mail.builder()
             .withRecipient(List.of(franz, franz))
             .withSubject(subjectMessageKey)
-            .withTemplate(templateName, new HashMap<>())
+            .withTemplate(templateName, locale -> new HashMap<>())
             .build();
 
         sut.send(mail);
 
-        verify(mailSenderService).sendEmail("Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody");
+        verify(mailSenderService).sendEmail("Urlaubsverwaltung <from@example.org>", "Urlaubsverwaltung <no-reply@example.org>", "franz@example.org", "subject", "emailBody");
         verifyNoMoreInteractions(mailSenderService);
     }
 

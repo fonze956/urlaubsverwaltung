@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static java.util.Arrays.asList;
+import static java.util.Locale.GERMAN;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -61,11 +62,11 @@ class TurnOfTheYearAccountUpdaterServiceTest {
         final Person user3 = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
         final Account account1 = createHolidaysAccount(user1, LAST_YEAR);
-        account1.setId(1);
+        account1.setId(1L);
         final Account account2 = createHolidaysAccount(user2, LAST_YEAR);
-        account2.setId(2);
+        account2.setId(2L);
         final Account account3 = createHolidaysAccount(user3, LAST_YEAR);
-        account3.setId(3);
+        account3.setId(3L);
 
         when(personService.getActivePersons()).thenReturn(asList(user1, user2, user3));
         when(accountService.getHolidaysAccount(LAST_YEAR, user1)).thenReturn(Optional.of(account1));
@@ -99,17 +100,11 @@ class TurnOfTheYearAccountUpdaterServiceTest {
         verify(vacationDaysReminderService).remindForRemainingVacationDays();
 
         final ArgumentCaptor<Mail> argument = ArgumentCaptor.forClass(Mail.class);
-        verify(mailService, times(2)).send(argument.capture());
-        final List<Mail> mails = argument.getAllValues();
-        final Mail mail0 = mails.get(0);
-        assertThat(mail0.getMailAddressRecipients()).hasValue(List.of(office));
-        assertThat(mail0.getSubjectMessageKey()).isEqualTo("subject.account.updatedRemainingDays");
-        assertThat(mail0.getTemplateName()).isEqualTo("account_cron_updated_accounts_turn_of_the_year");
-        assertThat(mail0.getTemplateModel()).containsEntry("totalRemainingVacationDays", BigDecimal.valueOf(30));
-        final Mail mail1 = mails.get(1);
-        assertThat(mail1.isSendToTechnicalMail()).isTrue();
-        assertThat(mail1.getSubjectMessageKey()).isEqualTo("subject.account.updatedRemainingDays");
-        assertThat(mail1.getTemplateName()).isEqualTo("account_cron_updated_accounts_turn_of_the_year");
-        assertThat(mail1.getTemplateModel()).containsEntry("totalRemainingVacationDays", BigDecimal.valueOf(30));
+        verify(mailService).send(argument.capture());
+        final Mail mail = argument.getValue();
+        assertThat(mail.getMailAddressRecipients()).hasValue(List.of(office));
+        assertThat(mail.getSubjectMessageKey()).isEqualTo("subject.account.updatedRemainingDays");
+        assertThat(mail.getTemplateName()).isEqualTo("account_cron_updated_accounts_turn_of_the_year");
+        assertThat(mail.getTemplateModel(GERMAN)).containsEntry("totalRemainingVacationDays", BigDecimal.valueOf(30));
     }
 }

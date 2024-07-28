@@ -43,12 +43,12 @@ class PersonCalendarService {
         this.clock = clock;
     }
 
-    PersonCalendar createCalendarForPerson(Integer personId, Period calendarPeriod) {
+    PersonCalendar createCalendarForPerson(Long personId, Period calendarPeriod) {
 
         final Person person = getPersonOrThrow(personId);
 
         final Optional<PersonCalendar> maybePersonCalendar = personCalendarRepository.findByPerson(person);
-        final PersonCalendar personCalendar = maybePersonCalendar.isEmpty() ? new PersonCalendar() : maybePersonCalendar.get();
+        final PersonCalendar personCalendar = maybePersonCalendar.orElseGet(PersonCalendar::new);
         personCalendar.setPerson(person);
         personCalendar.setCalendarPeriod(calendarPeriod);
         personCalendar.generateSecret();
@@ -56,14 +56,14 @@ class PersonCalendarService {
         return personCalendarRepository.save(personCalendar);
     }
 
-    Optional<PersonCalendar> getPersonCalendar(Integer personId) {
+    Optional<PersonCalendar> getPersonCalendar(Long personId) {
 
         final Person person = getPersonOrThrow(personId);
 
         return personCalendarRepository.findByPerson(person);
     }
 
-    ByteArrayResource getCalendarForPerson(Integer personId, String secret, Locale locale) {
+    ByteArrayResource getCalendarForPerson(Long personId, String secret, Locale locale) {
 
         if (StringUtils.isBlank(secret)) {
             throw new IllegalArgumentException("secret must not be empty.");
@@ -89,7 +89,7 @@ class PersonCalendarService {
     }
 
     @Transactional
-    public void deletePersonalCalendarForPerson(int personId) {
+    public void deletePersonalCalendarForPerson(long personId) {
 
         final Person person = getPersonOrThrow(personId);
 
@@ -99,10 +99,10 @@ class PersonCalendarService {
     @EventListener
     void deletePersonalCalendar(PersonDeletedEvent event) {
 
-        personCalendarRepository.deleteByPerson(event.getPerson());
+        personCalendarRepository.deleteByPerson(event.person());
     }
 
-    private Person getPersonOrThrow(Integer personId) {
+    private Person getPersonOrThrow(Long personId) {
 
         final Optional<Person> maybePerson = personService.getPersonByID(personId);
         if (maybePerson.isEmpty()) {

@@ -7,11 +7,16 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
+import org.synyx.urlaubsverwaltung.settings.SettingsService;
+import org.synyx.urlaubsverwaltung.sicknote.settings.SickNoteSettings;
+import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNote;
+import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteService;
+import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteStatus;
 import org.synyx.urlaubsverwaltung.util.DurationFormatter;
 import org.synyx.urlaubsverwaltung.workingtime.WorkDaysCountService;
 
@@ -27,9 +32,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import static java.util.Comparator.comparing;
-import static java.util.stream.Collectors.toList;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
@@ -37,8 +42,10 @@ import static org.synyx.urlaubsverwaltung.application.application.ApplicationSta
 import static org.synyx.urlaubsverwaltung.person.Role.APPLICATION_CANCELLATION_REQUESTED;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
+import static org.synyx.urlaubsverwaltung.person.Role.INACTIVE;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.SECOND_STAGE_AUTHORITY;
+import static org.synyx.urlaubsverwaltung.person.Role.SICK_NOTE_EDIT;
 
 /**
  * Controller for showing applications for leave in a certain state.
@@ -48,20 +55,24 @@ import static org.synyx.urlaubsverwaltung.person.Role.SECOND_STAGE_AUTHORITY;
 class ApplicationForLeaveViewController implements HasLaunchpad {
 
     private final ApplicationService applicationService;
+    private final SickNoteService sickNoteService;
     private final WorkDaysCountService workDaysCountService;
     private final DepartmentService departmentService;
     private final PersonService personService;
+    private final SettingsService settingsService;
     private final Clock clock;
     private final MessageSource messageSource;
 
     @Autowired
-    ApplicationForLeaveViewController(ApplicationService applicationService, WorkDaysCountService workDaysCountService,
-                                      DepartmentService departmentService, PersonService personService, Clock clock,
+    ApplicationForLeaveViewController(ApplicationService applicationService, SickNoteService sickNoteService, WorkDaysCountService workDaysCountService,
+                                      DepartmentService departmentService, PersonService personService, SettingsService settingsService, Clock clock,
                                       MessageSource messageSource) {
         this.applicationService = applicationService;
+        this.sickNoteService = sickNoteService;
         this.workDaysCountService = workDaysCountService;
         this.departmentService = departmentService;
         this.personService = personService;
+        this.settingsService = settingsService;
         this.clock = clock;
         this.messageSource = messageSource;
     }
@@ -84,13 +95,26 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
         return "application/application-overview";
     }
 
+    @GetMapping("/sicknote/submitted")
+    public String showApplicationWithSickNoteSubmittedContent(Model model, Locale locale) {
+
+        prepareApplicationModels(model, locale);
+        model.addAttribute("activeContent", "sicknote");
+
+        return "application/application-overview";
+    }
+
     private void prepareApplicationModels(Model model, Locale locale) {
+
+        final SickNoteSettings sickNoteSettings = settingsService.getSettings().getSickNoteSettings();
+
         final Person signedInUser = personService.getSignedInUser();
         model.addAttribute("signedInUser", signedInUser);
 
-        model.addAttribute("canAddApplicationForAnotherUser", signedInUser.hasRole(OFFICE) || signedInUser.hasRole(BOSS) || signedInUser.hasRole(DEPARTMENT_HEAD) || signedInUser.hasRole(SECOND_STAGE_AUTHORITY));
-        model.addAttribute("canAccessApplicationStatistics", signedInUser.hasRole(OFFICE) || signedInUser.hasRole(BOSS) || signedInUser.hasRole(DEPARTMENT_HEAD) || signedInUser.hasRole(SECOND_STAGE_AUTHORITY));
-        model.addAttribute("canAccessCancellationRequests", signedInUser.hasRole(OFFICE) || (signedInUser.hasRole(APPLICATION_CANCELLATION_REQUESTED) && (signedInUser.hasRole(BOSS) || signedInUser.hasRole(DEPARTMENT_HEAD) || signedInUser.hasRole(SECOND_STAGE_AUTHORITY))));
+        model.addAttribute("canAccessApplicationStatistics", isAllowedToAccessApplicationStatistics(signedInUser));
+        model.addAttribute("canAccessCancellationRequests", isAllowedToAccessCancellationRequest(signedInUser));
+        model.addAttribute("canAccessOtherApplications", isAllowedToAccessOtherApplications(signedInUser));
+        model.addAttribute("canAccessSickNoteSubmissions", sickNoteSettings.getUserIsAllowedToSubmitSickNotes() && isAllowedToAccessSickNoteSubmissions(signedInUser));
 
         final List<Person> membersAsDepartmentHead = signedInUser.hasRole(DEPARTMENT_HEAD) ? departmentService.getMembersForDepartmentHead(signedInUser) : List.of();
         final List<Person> membersAsSecondStageAuthority = signedInUser.hasRole(SECOND_STAGE_AUTHORITY) ? departmentService.getMembersForSecondStageAuthority(signedInUser) : List.of();
@@ -103,6 +127,10 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
         final List<ApplicationForLeaveDto> otherApplicationsDtos = mapToApplicationForLeaveDtoList(otherApplications, signedInUser, membersAsDepartmentHead, membersAsSecondStageAuthority, locale);
         model.addAttribute("otherApplications", otherApplicationsDtos);
 
+        final List<SickNote> otherSickNotes = sickNoteService.getForStatesAndPerson(List.of(SickNoteStatus.SUBMITTED), getPersonsForRelevantSubmittedSickNotes(signedInUser)).stream().toList();
+        final List<SickNoteDto> otherSickNotesDtos = mapToSickNoteDtoList(otherSickNotes, locale);
+        model.addAttribute("otherSickNotes", otherSickNotesDtos);
+
         final List<ApplicationForLeave> applicationsForLeaveCancellationRequests = getAllRelevantApplicationsForLeaveCancellationRequests(signedInUser, membersAsDepartmentHead, membersAsSecondStageAuthority);
         final List<ApplicationForLeaveDto> cancellationDtoList = mapToApplicationForLeaveDtoList(applicationsForLeaveCancellationRequests, signedInUser, membersAsDepartmentHead, membersAsSecondStageAuthority, locale);
         if (!cancellationDtoList.isEmpty()) {
@@ -114,6 +142,41 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
         model.addAttribute("applications_holiday_replacements", replacements);
     }
 
+    private static boolean isAllowedToAccessApplicationStatistics(Person signedInUser) {
+        return signedInUser.hasAnyRole(OFFICE, BOSS, DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY);
+    }
+
+    private static boolean isAllowedToAccessCancellationRequest(Person signedInUser) {
+        return signedInUser.hasRole(OFFICE)
+            || (signedInUser.hasRole(APPLICATION_CANCELLATION_REQUESTED) && (signedInUser.hasAnyRole(BOSS, DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY)));
+    }
+
+    private static boolean isAllowedToAccessOtherApplications(Person signedInUser) {
+        return signedInUser.hasAnyRole(OFFICE, BOSS, DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY);
+    }
+
+    private static boolean isAllowedToAccessSickNoteSubmissions(Person signedInUser) {
+        return signedInUser.hasRole(OFFICE)
+            || (signedInUser.hasRole(SICK_NOTE_EDIT) && (signedInUser.hasAnyRole(BOSS, DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY)));
+    }
+
+    private List<SickNoteDto> mapToSickNoteDtoList(List<SickNote> sickNotes, Locale locale) {
+        return sickNotes.stream()
+            .map(sickNote -> toView(sickNote, messageSource, locale))
+            .toList();
+    }
+
+    private static SickNoteDto toView(SickNote sickNote, MessageSource messageSource, Locale locale) {
+        return new SickNoteDto(
+            sickNote.getId().toString(),
+            sickNote.getWorkDays(),
+            new SickNotePersonDto(sickNote.getPerson().getNiceName(), sickNote.getPerson().getGravatarURL(), sickNote.getPerson().isInactive(), sickNote.getId()),
+            sickNote.getSickNoteType().getMessageKey(),
+            sickNote.getStatus().name(),
+            toDurationOfAbsenceDescription(sickNote, messageSource, locale)
+        );
+    }
+
     private List<ApplicationForLeaveDto> mapToApplicationForLeaveDtoList(List<ApplicationForLeave> applications, Person signedInUser, List<Person> membersAsDepartmentHead,
                                                                          List<Person> membersAsSecondStageAuthority, Locale locale) {
 
@@ -122,7 +185,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
                 final boolean allowedToAccessPersonData = departmentService.isSignedInUserAllowedToAccessPersonData(signedInUser, applicationForLeave.getPerson());
                 return toView(applicationForLeave, signedInUser, membersAsDepartmentHead, membersAsSecondStageAuthority, messageSource, locale, allowedToAccessPersonData);
             })
-            .collect(toList());
+            .toList();
     }
 
     private static ApplicationForLeaveDto toView(ApplicationForLeave application, Person signedInUser, List<Person> membersAsDepartmentHead,
@@ -150,7 +213,8 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
         return ApplicationForLeaveDto.builder()
             .id(application.getId())
             .person(toViewPerson(person, allowedToAccessPersonData))
-            .vacationType(toViewVacationType(application.getVacationType()))
+            .vacationType(toViewVacationType(application.getVacationType(), locale))
+            .status(application.getStatus())
             .duration(DurationFormatter.toDurationString(application.getHours(), messageSource, locale))
             .dayLength(application.getDayLength())
             .workDays(application.getWorkDays())
@@ -194,13 +258,31 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
         return messageSource.getMessage("absence.period.multipleDays", new Object[]{dateStartString, dateEndString}, locale);
     }
 
+    private static String toDurationOfAbsenceDescription(SickNote sickNote, MessageSource messageSource, Locale locale) {
+        final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy", locale);
+
+        final LocalDate startDate = sickNote.getStartDate();
+        final LocalDate endDate = sickNote.getEndDate();
+
+        final String dateStartString = startDate.format(dateFormatter);
+
+        if (startDate.isEqual(endDate)) {
+            final DayLength dayLength = sickNote.getDayLength();
+            final String dayLengthText = dayLength == null ? "" : messageSource.getMessage(dayLength.name(), new Object[]{}, locale);
+            return messageSource.getMessage("absence.period.singleDay", new Object[]{dateStartString, dayLengthText}, locale);
+        }
+
+        final String dateEndString = endDate.format(dateFormatter);
+        return messageSource.getMessage("absence.period.multipleDays", new Object[]{dateStartString, dateEndString}, locale);
+    }
+
     private static ApplicationPersonDto toViewPerson(Person person, boolean allowedToAccessPersonData) {
-        final Integer id = allowedToAccessPersonData ? person.getId() : null;
+        final Long id = allowedToAccessPersonData ? person.getId() : null;
         return new ApplicationPersonDto(person.getNiceName(), person.getGravatarURL(), person.isInactive(), id);
     }
 
-    private static ApplicationForLeaveDto.VacationType toViewVacationType(VacationTypeEntity vacationType) {
-        return new ApplicationForLeaveDto.VacationType(vacationType.getCategory().name(), vacationType.getMessageKey());
+    private static ApplicationForLeaveDto.VacationTypeDto toViewVacationType(VacationType<?> vacationType, Locale locale) {
+        return new ApplicationForLeaveDto.VacationTypeDto(vacationType.getCategory().name(), vacationType.getLabel(locale), vacationType.getColor());
     }
 
     private List<ApplicationReplacementDto> getHolidayReplacements(Person signedInUser, LocalDate holidayReplacementForDate, Locale locale) {
@@ -211,7 +293,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
                 final boolean allowedToAccessPersonData = departmentService.isSignedInUserAllowedToAccessPersonData(signedInUser, application.getPerson());
                 return toApplicationReplacementDto(application, signedInUser, locale, allowedToAccessPersonData);
             })
-            .collect(toList());
+            .toList();
     }
 
     private List<ApplicationForLeave> getAllRelevantApplicationsForLeaveCancellationRequests(Person signedInUser, List<Person> membersAsDepartmentHead, List<Person> membersAsSecondStageAuthority) {
@@ -238,7 +320,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
             .filter(withoutApplicationsOf(signedInUser))
             .map(application -> new ApplicationForLeave(application, workDaysCountService))
             .sorted(comparing(ApplicationForLeave::getStartDate))
-            .collect(toList());
+            .toList();
     }
 
     private List<ApplicationForLeave> getOtherRelevantApplicationsForLeave(Person signedInUser, List<Person> membersAsDepartmentHead, List<Person> membersAsSecondStageAuthority) {
@@ -247,7 +329,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
             // Boss and Office can see all waiting and temporary allowed applications leave
             return getApplicationsForLeaveForBossOrOffice().stream()
                 .filter(withoutApplicationsOf(signedInUser))
-                .collect(toList());
+                .toList();
         }
 
         final List<ApplicationForLeave> applicationsForLeave = new ArrayList<>();
@@ -264,14 +346,14 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
 
         return applicationsForLeave.stream()
             .filter(distinctByKey(ApplicationForLeave::getId))
-            .collect(toList());
+            .toList();
     }
 
     private List<ApplicationForLeave> getApplicationsForLeaveForBossOrOffice() {
         return applicationService.getForStates(List.of(WAITING, TEMPORARY_ALLOWED)).stream()
             .map(application -> new ApplicationForLeave(application, workDaysCountService))
             .sorted(comparing(ApplicationForLeave::getStartDate))
-            .collect(toList());
+            .toList();
     }
 
     private List<ApplicationForLeave> getApplicationsForLeaveForUser(Person user) {
@@ -280,7 +362,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
         return applicationService.getForStatesAndPerson(states, List.of(user)).stream()
             .map(application -> new ApplicationForLeave(application, workDaysCountService))
             .sorted(comparing(ApplicationForLeave::getStartDate))
-            .collect(toList());
+            .toList();
     }
 
     private List<ApplicationForLeave> getApplicationsForLeaveForDepartmentHead(Person head, List<Person> members) {
@@ -289,7 +371,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
             .filter(withoutSecondStageAuthorityApplications())
             .map(application -> new ApplicationForLeave(application, workDaysCountService))
             .sorted(comparing(ApplicationForLeave::getStartDate))
-            .collect(toList());
+            .toList();
     }
 
     private List<ApplicationForLeave> getApplicationsForLeaveForSecondStageAuthority(Person secondStage, List<Person> members) {
@@ -297,7 +379,7 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
             .filter(withoutApplicationsOf(secondStage))
             .map(application -> new ApplicationForLeave(application, workDaysCountService))
             .sorted(comparing(ApplicationForLeave::getStartDate))
-            .collect(toList());
+            .toList();
     }
 
     private Predicate<Application> withoutApplicationsOf(Person person) {
@@ -338,4 +420,26 @@ class ApplicationForLeaveViewController implements HasLaunchpad {
             .dayLength(dayLength)
             .build();
     }
+
+    private List<Person> getPersonsForRelevantSubmittedSickNotes(Person signedInUser) {
+
+        if (signedInUser.hasRole(OFFICE) || (signedInUser.hasRole(BOSS) && signedInUser.hasRole(SICK_NOTE_EDIT))) {
+            return personService.getActivePersons().stream().filter(person -> !person.equals(signedInUser)).toList();
+        }
+
+        final List<Person> membersForDepartmentHead = signedInUser.hasRole(DEPARTMENT_HEAD) && signedInUser.hasRole(SICK_NOTE_EDIT)
+            ? departmentService.getMembersForDepartmentHead(signedInUser)
+            : List.of();
+
+        final List<Person> memberForSecondStageAuthority = signedInUser.hasRole(SECOND_STAGE_AUTHORITY) && signedInUser.hasRole(SICK_NOTE_EDIT)
+            ? departmentService.getMembersForSecondStageAuthority(signedInUser)
+            : List.of();
+
+        return Stream.concat(memberForSecondStageAuthority.stream(), membersForDepartmentHead.stream())
+            .filter(person -> !person.hasRole(INACTIVE))
+            .distinct()
+            .sorted(comparing(Person::getFirstName).thenComparing(Person::getLastName))
+            .toList();
+    }
+
 }

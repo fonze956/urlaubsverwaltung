@@ -1,10 +1,10 @@
 package org.synyx.urlaubsverwaltung.overtime.web;
 
+import jakarta.validation.constraints.Min;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.synyx.urlaubsverwaltung.overtime.Overtime;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import javax.validation.constraints.Min;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
@@ -22,7 +22,7 @@ import static org.synyx.urlaubsverwaltung.util.DateAndTimeFormat.ISO_DATE;
  */
 public class OvertimeForm {
 
-    private Integer id;
+    private Long id;
     private Person person;
     @DateTimeFormat(pattern = DD_MM_YYYY, fallbackPatterns = {D_M_YY, D_M_YYYY, ISO_DATE})
     private LocalDate startDate;
@@ -57,11 +57,11 @@ public class OvertimeForm {
         this.reduce = overtimeHours.doubleValue() < 0;
     }
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

@@ -1,17 +1,20 @@
 package org.synyx.urlaubsverwaltung.workingtime;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.SequenceGenerator;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import javax.persistence.Entity;
-import javax.persistence.Enumerated;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.OneToOne;
 import java.time.LocalDate;
 import java.util.Objects;
 
-import static javax.persistence.EnumType.STRING;
+import static jakarta.persistence.EnumType.STRING;
+import static jakarta.persistence.GenerationType.SEQUENCE;
 import static org.synyx.urlaubsverwaltung.period.DayLength.ZERO;
 
 
@@ -22,8 +25,10 @@ import static org.synyx.urlaubsverwaltung.period.DayLength.ZERO;
 class WorkingTimeEntity {
 
     @Id
-    @GeneratedValue
-    private Integer id;
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "working_time_generator")
+    @SequenceGenerator(name = "working_time_generator", sequenceName = "working_time_id_seq")
+    private Long id;
 
     @OneToOne
     private Person person;
@@ -57,11 +62,11 @@ class WorkingTimeEntity {
     @Enumerated(STRING)
     private FederalState federalStateOverride;
 
-    Integer getId() {
+    Long getId() {
         return id;
     }
 
-    void setId(Integer id) {
+    void setId(Long id) {
         this.id = id;
     }
 

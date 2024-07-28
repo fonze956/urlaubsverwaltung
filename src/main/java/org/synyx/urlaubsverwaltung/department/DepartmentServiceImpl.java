@@ -37,12 +37,8 @@ import static java.util.function.Predicate.isEqual;
 import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toUnmodifiableList;
 import static org.slf4j.LoggerFactory.getLogger;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.activeStatuses;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
@@ -104,13 +100,13 @@ class DepartmentServiceImpl implements DepartmentService {
     }
 
     @Override
-    public Page<Person> getManagedMembersOfPersonAndDepartment(Person person, Integer departmentId, PageableSearchQuery pageableSearchQuery) {
+    public Page<Person> getManagedMembersOfPersonAndDepartment(Person person, Long departmentId, PageableSearchQuery pageableSearchQuery) {
         final Predicate<Person> filter = nameContains(pageableSearchQuery.getQuery()).and(not(Person::isInactive));
         return managedMembersOfPersonAndDepartment(person, departmentId, pageableSearchQuery, filter);
     }
 
     @Override
-    public Page<Person> getManagedInactiveMembersOfPersonAndDepartment(Person person, Integer departmentId, PageableSearchQuery pageableSearchQuery) {
+    public Page<Person> getManagedInactiveMembersOfPersonAndDepartment(Person person, Long departmentId, PageableSearchQuery pageableSearchQuery) {
         final Predicate<Person> filter = nameContains(pageableSearchQuery.getQuery()).and(Person::isInactive);
         return managedMembersOfPersonAndDepartment(person, departmentId, pageableSearchQuery, filter);
     }
@@ -137,7 +133,7 @@ class DepartmentServiceImpl implements DepartmentService {
             .distinct()
             .filter(nameContains(personPageableSearchQuery.getQuery()).and(predicate))
             .sorted(new SortComparator<>(Person.class, pageable.getSort()))
-            .collect(toList());
+            .toList();
 
         final List<Person> content = managedMembers.stream()
             .skip((long) pageable.getPageNumber() * pageable.getPageSize())
@@ -148,13 +144,18 @@ class DepartmentServiceImpl implements DepartmentService {
     }
 
     @Override
-    public boolean departmentExists(Integer departmentId) {
+    public boolean departmentExists(Long departmentId) {
         return departmentRepository.existsById(departmentId);
     }
 
     @Override
-    public Optional<Department> getDepartmentById(Integer departmentId) {
+    public Optional<Department> getDepartmentById(Long departmentId) {
         return departmentRepository.findById(departmentId).map(this::mapToDepartment);
+    }
+
+    @Override
+    public Optional<Department> getDepartmentByName(String departmentName) {
+        return departmentRepository.findFirstByName(departmentName).map(this::mapToDepartment);
     }
 
     @Override
@@ -214,9 +215,9 @@ class DepartmentServiceImpl implements DepartmentService {
     @EventListener
     void deleteAssignedDepartmentsOfMember(PersonDeletedEvent event) {
 
-        getAssignedDepartmentsOfMember(event.getPerson()).forEach(department -> {
+        getAssignedDepartmentsOfMember(event.person()).forEach(department -> {
             department.setMembers(department.getMembers().stream()
-                .filter(not(isEqual(event.getPerson())))
+                .filter(not(isEqual(event.person())))
                 .collect(toList()));
             update(department);
         });
@@ -230,9 +231,9 @@ class DepartmentServiceImpl implements DepartmentService {
     @EventListener
     void deleteDepartmentHead(PersonDeletedEvent event) {
 
-        getManagedDepartmentsOfDepartmentHead(event.getPerson()).forEach(department -> {
+        getManagedDepartmentsOfDepartmentHead(event.person()).forEach(department -> {
             department.setDepartmentHeads(department.getDepartmentHeads().stream()
-                .filter(person -> !person.equals(event.getPerson()))
+                .filter(person -> !person.equals(event.person()))
                 .collect(toList()));
             update(department);
         });
@@ -247,16 +248,16 @@ class DepartmentServiceImpl implements DepartmentService {
     @EventListener
     void deleteSecondStageAuthority(PersonDeletedEvent event) {
 
-        getManagedDepartmentsOfSecondStageAuthority(event.getPerson()).forEach(department -> {
+        getManagedDepartmentsOfSecondStageAuthority(event.person()).forEach(department -> {
             department.setSecondStageAuthorities(department.getSecondStageAuthorities().stream()
-                .filter(person -> !person.equals(event.getPerson()))
+                .filter(person -> !person.equals(event.person()))
                 .collect(toList()));
             update(department);
         });
     }
 
     @Override
-    public void delete(Integer departmentId) {
+    public void delete(Long departmentId) {
 
         if (this.departmentExists(departmentId)) {
             departmentRepository.deleteById(departmentId);
@@ -277,6 +278,7 @@ class DepartmentServiceImpl implements DepartmentService {
     public List<Department> getAssignedDepartmentsOfMember(Person member) {
         return departmentRepository.findByMembersPerson(member).stream()
             .map(this::mapToDepartment)
+            .sorted(departmentComparator())
             .collect(toList());
     }
 
@@ -284,6 +286,7 @@ class DepartmentServiceImpl implements DepartmentService {
     public List<Department> getManagedDepartmentsOfDepartmentHead(Person departmentHead) {
         return departmentRepository.findByDepartmentHeads(departmentHead).stream()
             .map(this::mapToDepartment)
+            .sorted(departmentComparator())
             .collect(toList());
     }
 
@@ -291,6 +294,7 @@ class DepartmentServiceImpl implements DepartmentService {
     public List<Department> getManagedDepartmentsOfSecondStageAuthority(Person secondStageAuthority) {
         return departmentRepository.findBySecondStageAuthorities(secondStageAuthority).stream()
             .map(this::mapToDepartment)
+            .sorted(departmentComparator())
             .collect(toList());
     }
 
@@ -319,19 +323,24 @@ class DepartmentServiceImpl implements DepartmentService {
     }
 
     @Override
-    public List<Application> getApplicationsForLeaveOfMembersInDepartmentsOfPerson(Person member, LocalDate startDate, LocalDate endDate) {
-        final Predicate<Application> allowed = application -> application.hasStatus(ALLOWED);
-        final Predicate<Application> temporaryAllowed = application -> application.hasStatus(TEMPORARY_ALLOWED);
-        final Predicate<Application> waiting = application -> application.hasStatus(WAITING);
-        final Predicate<Application> allowedCancellationRequested = application -> application.hasStatus(ALLOWED_CANCELLATION_REQUESTED);
+    public List<Application> getApplicationsFromColleaguesOf(Person person, LocalDate startDate, LocalDate endDate) {
 
-        return getMembersOfAssignedDepartments(member).stream()
-            .filter(not(isEqual(member)))
-            .map(departmentMember -> applicationService.getApplicationsForACertainPeriodAndPerson(startDate, endDate, departmentMember))
-            .flatMap(Collection::stream)
-            .filter(allowed.or(temporaryAllowed).or(waiting).or(allowedCancellationRequested))
+        final List<Application> colleaguesApplications;
+
+        if (getNumberOfDepartments() == 0) {
+            colleaguesApplications = applicationService.getForStates(activeStatuses(), startDate, endDate).stream()
+                .filter(application -> !application.getPerson().equals(person))
+                .toList();
+        } else {
+            final List<Person> colleagues = getMembersOfAssignedDepartments(person).stream()
+                .filter(not(isEqual(person)))
+                .toList();
+            colleaguesApplications = applicationService.getForStatesAndPerson(activeStatuses(), colleagues, startDate, endDate);
+        }
+
+        return colleaguesApplications.stream()
             .sorted(comparing(Application::getStartDate))
-            .collect(toList());
+            .toList();
     }
 
     @Override
@@ -422,7 +431,7 @@ class DepartmentServiceImpl implements DepartmentService {
 
             final List<String> departmentNames = departmentList.stream()
                 .map(Department::getName)
-                .collect(toUnmodifiableList());
+                .toList();
 
             personList.forEach(person -> {
                 if (persons.contains(person)) {
@@ -523,7 +532,7 @@ class DepartmentServiceImpl implements DepartmentService {
         return list;
     }
 
-    private Page<Person> managedMembersOfPersonAndDepartment(Person person, Integer departmentId, PageableSearchQuery pageableSearchQuery, Predicate<Person> filter) {
+    private Page<Person> managedMembersOfPersonAndDepartment(Person person, Long departmentId, PageableSearchQuery pageableSearchQuery, Predicate<Person> filter) {
         final Pageable pageable = pageableSearchQuery.getPageable();
 
         final DepartmentEntity departmentEntity = departmentRepository.findById(departmentId)
@@ -574,7 +583,7 @@ class DepartmentServiceImpl implements DepartmentService {
             .map(Department::getMembers)
             .flatMap(List::stream)
             .distinct()
-            .collect(toList());
+            .toList();
     }
 
     private boolean isSecondStageAuthorityAllowedToAccessPersonData(Person secondStageAuthority, Person person) {

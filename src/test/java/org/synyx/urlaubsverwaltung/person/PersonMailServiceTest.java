@@ -13,6 +13,7 @@ import org.synyx.urlaubsverwaltung.person.web.PersonPermissionsRoleDto;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Locale.GERMAN;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,7 +43,7 @@ class PersonMailServiceTest {
         when(personService.getActivePersonsWithNotificationType(NOTIFICATION_EMAIL_PERSON_NEW_MANAGEMENT_ALL)).thenReturn(List.of(personWithNotification));
 
         final Person createdPerson = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        createdPerson.setId(1);
+        createdPerson.setId(1L);
         final PersonCreatedEvent event = new PersonCreatedEvent(this, createdPerson.getId(), createdPerson.getNiceName(), createdPerson.getUsername(), createdPerson.getEmail(), createdPerson.isActive());
 
         final Map<String, Object> model = Map.of(
@@ -58,7 +59,7 @@ class PersonMailServiceTest {
         assertThat(mails.get(0).getMailAddressRecipients()).hasValue(List.of(personWithNotification));
         assertThat(mails.get(0).getSubjectMessageKey()).isEqualTo("subject.person.created");
         assertThat(mails.get(0).getTemplateName()).isEqualTo("person_created_office");
-        assertThat(mails.get(0).getTemplateModel()).isEqualTo(model);
+        assertThat(mails.get(0).getTemplateModel(GERMAN)).isEqualTo(model);
     }
 
     @Test
@@ -79,6 +80,6 @@ class PersonMailServiceTest {
         assertThat(mails.get(0).getMailAddressRecipients()).hasValue(List.of(person));
         assertThat(mails.get(0).getSubjectMessageKey()).isEqualTo("subject.person.gained-permissions");
         assertThat(mails.get(0).getTemplateName()).isEqualTo("person_gained_permissions");
-        assertThat(mails.get(0).getTemplateModel()).isEqualTo(model);
+        assertThat(mails.get(0).getTemplateModel(GERMAN)).isEqualTo(model);
     }
 }

@@ -1,20 +1,20 @@
 package org.synyx.urlaubsverwaltung.sicknote.sicknote;
 
-import org.joda.time.Interval;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
+import org.synyx.urlaubsverwaltung.absence.DateRange;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.overlap.OverlapCase;
 import org.synyx.urlaubsverwaltung.overlap.OverlapService;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
+import org.synyx.urlaubsverwaltung.settings.SettingsService;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTime;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeService;
 
-import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -52,14 +52,14 @@ public class SickNoteValidator implements Validator {
     private final OverlapService overlapService;
     private final WorkingTimeService workingTimeService;
     private final DepartmentService departmentService;
-    private final Clock clock;
+    private final SettingsService settingsService;
 
     @Autowired
-    public SickNoteValidator(OverlapService overlapService, WorkingTimeService workingTimeService, DepartmentService departmentService, Clock clock) {
+    SickNoteValidator(OverlapService overlapService, WorkingTimeService workingTimeService, DepartmentService departmentService, SettingsService settingsService) {
         this.overlapService = overlapService;
         this.workingTimeService = workingTimeService;
         this.departmentService = departmentService;
-        this.clock = clock;
+        this.settingsService = settingsService;
     }
 
     @Override
@@ -82,6 +82,10 @@ public class SickNoteValidator implements Validator {
     private void validateApplier(SickNote sickNote, Errors errors) {
         final Person applier = sickNote.getApplier();
         if (applier == null) {
+            return;
+        }
+
+        if (settingsService.getSettings().getSickNoteSettings().getUserIsAllowedToSubmitSickNotes() && applier.equals(sickNote.getPerson())) {
             return;
         }
 
@@ -145,15 +149,13 @@ public class SickNoteValidator implements Validator {
 
             if (sickNoteStartDate != null && sickNoteEndDate != null) {
                 // Intervals are inclusive of the start instant and exclusive of the end, i.e. add one day at the end
-                final long start = sickNoteStartDate.atStartOfDay(clock.getZone()).toInstant().toEpochMilli();
-                final long end = sickNoteEndDate.plusDays(1).atStartOfDay(clock.getZone()).toInstant().toEpochMilli();
-                final Interval sickNoteInterval = new Interval(start, end);
+                final DateRange sickNoteDateRange = new DateRange(sickNoteStartDate, sickNoteEndDate);
 
-                if (!sickNoteInterval.contains(aubStartDate.atStartOfDay(clock.getZone()).toInstant().toEpochMilli())) {
+                if (!sickNoteDateRange.isOverlapping(new DateRange(aubStartDate, aubStartDate))) {
                     errors.rejectValue(ATTRIBUTE_AUB_START_DATE, ERROR_PERIOD_SICK_NOTE);
                 }
 
-                if (!sickNoteInterval.contains(aubEndDate.atStartOfDay(clock.getZone()).toInstant().toEpochMilli())) {
+                if (!sickNoteDateRange.isOverlapping(new DateRange(aubEndDate, aubEndDate))) {
                     errors.rejectValue(ATTRIBUTE_AUB_END_DATE, ERROR_PERIOD_SICK_NOTE);
                 }
             }

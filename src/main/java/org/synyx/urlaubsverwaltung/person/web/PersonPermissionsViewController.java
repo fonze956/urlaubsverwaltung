@@ -26,7 +26,6 @@ import java.util.function.Predicate;
 
 import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.toList;
-import static org.synyx.urlaubsverwaltung.person.Role.ADMIN;
 import static org.synyx.urlaubsverwaltung.person.Role.INACTIVE;
 import static org.synyx.urlaubsverwaltung.person.Role.USER;
 import static org.synyx.urlaubsverwaltung.person.web.PersonPermissionsMapper.mapRoleToPermissionsDto;
@@ -45,9 +44,13 @@ public class PersonPermissionsViewController implements HasLaunchpad {
     private final SessionService sessionService;
 
     @Autowired
-    public PersonPermissionsViewController(PersonService personService, DepartmentService departmentService,
-                                           PersonMailService personMailService, PersonPermissionsDtoValidator validator,
-                                           SessionService sessionService) {
+    PersonPermissionsViewController(
+        PersonService personService,
+        DepartmentService departmentService,
+        PersonMailService personMailService,
+        PersonPermissionsDtoValidator validator,
+        SessionService sessionService
+    ) {
         this.personService = personService;
         this.departmentService = departmentService;
         this.personMailService = personMailService;
@@ -57,12 +60,13 @@ public class PersonPermissionsViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @GetMapping("/person/{personId}/permissions")
-    public String showPersonPermissions(@PathVariable("personId") Integer personId, Model model) throws UnknownPersonException {
+    public String showPersonPermissions(@PathVariable("personId") Long personId, Model model) throws UnknownPersonException {
 
         final Person person = personService.getPersonByID(personId).orElseThrow(() -> new UnknownPersonException(personId));
 
         model.addAttribute("person", mapToPersonPermissionsDto(person));
-        model.addAttribute("departments", departmentService.getManagedDepartmentsOfDepartmentHead(person));
+        model.addAttribute("departments", departmentService.getAssignedDepartmentsOfMember(person));
+        model.addAttribute("departmentHeadDepartments", departmentService.getManagedDepartmentsOfDepartmentHead(person));
         model.addAttribute("secondStageDepartments", departmentService.getManagedDepartmentsOfSecondStageAuthority(person));
 
         return "person/person_permissions";
@@ -70,7 +74,7 @@ public class PersonPermissionsViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @PostMapping("/person/{personId}/permissions")
-    public String editPersonPermissions(@PathVariable("personId") Integer personId,
+    public String editPersonPermissions(@PathVariable("personId") Long personId,
                                         @ModelAttribute("person") PersonPermissionsDto personPermissionsDto, Errors errors,
                                         RedirectAttributes redirectAttributes) throws UnknownPersonException {
 
@@ -97,7 +101,7 @@ public class PersonPermissionsViewController implements HasLaunchpad {
     private static List<Role> calculateAddedPermissions(Collection<Role> oldRoles, Person updatedPerson) {
         return updatedPerson.getPermissions().stream()
             .filter(not(oldRoles::contains))
-            .filter(role(INACTIVE).and(role(USER)).and(role(ADMIN)))
+            .filter(role(INACTIVE).and(role(USER)))
             .collect(toList());
     }
 

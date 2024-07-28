@@ -39,15 +39,15 @@ public enum FederalState {
 
     GREECE_GREECE("gr", "gr"),
 
-    AUSTRIA_BURGENLAND("at", "b"),
-    AUSTRIA_KAERNTEN("at", "k"),
-    AUSTRIA_NIEDEROESTERREICH("at", "la"),
-    AUSTRIA_OBEROESTERREICH("at", "ua"),
-    AUSTRIA_SALZBURG("at", "s"),
-    AUSTRIA_STEIERMARK("at", "st"),
-    AUSTRIA_TIROL("at", "t"),
-    AUSTRIA_VORARLBERG("at", "va"),
-    AUSTRIA_WIEN("at", "w"),
+    AUSTRIA_BURGENLAND("at", "1"),
+    AUSTRIA_KAERNTEN("at", "2"),
+    AUSTRIA_NIEDEROESTERREICH("at", "3"),
+    AUSTRIA_OBEROESTERREICH("at", "4"),
+    AUSTRIA_SALZBURG("at", "5"),
+    AUSTRIA_STEIERMARK("at", "6"),
+    AUSTRIA_TIROL("at", "7"),
+    AUSTRIA_VORARLBERG("at", "8"),
+    AUSTRIA_WIEN("at", "9"),
 
     SWITZERLAND_AARGAU("ch", "ag"),
     SWITZERLAND_APPENZELL_INNERRHODEN("ch", "ai"),
@@ -87,7 +87,32 @@ public enum FederalState {
 
     MALTA("mt", "mt"),
 
-    ITALY("it","it");
+    ITALY("it", "it"),
+
+    CROATIA("hr", "hr"),
+
+    SPAIN_ANDALUCIA("es", "an"),
+    SPAIN_ARAGON("es", "ar"),
+    SPAIN_CEUTA("es", "ce"),
+    SPAIN_MELILLA("es", "ml"),
+    SPAIN_CASTILE_AND_LEON("es", "cl"),
+    SPAIN_CASTILE_LA_MANCHA("es", "cm"),
+    SPAIN_CANARY_ISLANDS("es", "cn"),
+    SPAIN_CATALONIA("es", "ct"),
+    SPAIN_BARCELONA("es", "bcn"),
+    SPAIN_EXTREMADURA("es", "ex"),
+    SPAIN_GALICIA("es", "ga"),
+    SPAIN_BALEARIC_ISLAND("es", "ib"),
+    SPAIN_LA_RIOJA("es", "lo"),
+    SPAIN_MADRID("es", "md"),
+    SPAIN_MURCIA("es", "mc"),
+    SPAIN_NAVARRA("es", "nc"),
+    SPAIN_ASTURIAS("es", "as"),
+    SPAIN_EUSKADI("es", "pv"),
+    SPAIN_CANTABRIA("es", "cb"),
+    SPAIN_VALENCIA("es", "vc"),
+
+    NETHERLANDS("nl", "nl");
 
     private final String[] codes;
 

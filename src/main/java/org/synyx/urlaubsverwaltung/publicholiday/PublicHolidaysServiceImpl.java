@@ -1,7 +1,7 @@
 package org.synyx.urlaubsverwaltung.publicholiday;
 
-import de.focus_shift.Holiday;
-import de.focus_shift.HolidayManager;
+import de.focus_shift.jollyday.core.Holiday;
+import de.focus_shift.jollyday.core.HolidayManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static java.util.stream.Collectors.toUnmodifiableList;
 import static org.synyx.urlaubsverwaltung.period.DayLength.FULL;
 import static org.synyx.urlaubsverwaltung.period.DayLength.ZERO;
 import static org.synyx.urlaubsverwaltung.util.DateUtil.isChristmasEve;
@@ -50,21 +49,11 @@ public class PublicHolidaysServiceImpl implements PublicHolidaysService {
     @Override
     public List<PublicHoliday> getPublicHolidays(LocalDate from, LocalDate to, FederalState federalState) {
         final WorkingTimeSettings workingTimeSettings = getWorkingTimeSettings();
-        return getPublicHolidays(from, to, federalState, workingTimeSettings);
-    }
-
-    @Override
-    public Optional<PublicHoliday> getPublicHoliday(LocalDate date, FederalState federalState, WorkingTimeSettings workingTimeSettings) {
-        return getPublicHolidays(date, date, federalState, workingTimeSettings).stream().findFirst();
-    }
-
-    @Override
-    public List<PublicHoliday> getPublicHolidays(LocalDate from, LocalDate to, FederalState federalState, WorkingTimeSettings workingTimeSettings) {
         final Locale locale = LocaleContextHolder.getLocale();
 
         return getHolidays(from, to, federalState).stream()
             .map(holiday -> new PublicHoliday(holiday.getDate(), getHolidayDayLength(workingTimeSettings, holiday.getDate(), federalState), holiday.getDescription(locale)))
-            .collect(toUnmodifiableList());
+            .toList();
     }
 
     private DayLength getHolidayDayLength(WorkingTimeSettings workingTimeSettings, LocalDate date, FederalState federalState) {

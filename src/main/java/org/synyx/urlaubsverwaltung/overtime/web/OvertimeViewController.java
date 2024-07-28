@@ -1,6 +1,7 @@
 package org.synyx.urlaubsverwaltung.overtime.web;
 
 import de.focus_shift.launchpad.api.HasLaunchpad;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Controller;
@@ -17,8 +18,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
-import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeDto;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeViewModelService;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
@@ -31,10 +30,8 @@ import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.person.UnknownPersonException;
 import org.synyx.urlaubsverwaltung.person.web.PersonPropertyEditor;
 import org.synyx.urlaubsverwaltung.settings.SettingsService;
-import org.synyx.urlaubsverwaltung.util.DateUtil;
 import org.synyx.urlaubsverwaltung.web.DecimalNumberPropertyEditor;
 
-import javax.validation.Valid;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -44,10 +41,9 @@ import java.util.Locale;
 import java.util.Optional;
 
 import static java.lang.String.format;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
+import static java.time.temporal.TemporalAdjusters.lastDayOfYear;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.activeStatuses;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OVERTIME;
 import static org.synyx.urlaubsverwaltung.overtime.web.OvertimeListMapper.mapToDto;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
@@ -71,10 +67,10 @@ public class OvertimeViewController implements HasLaunchpad {
     private final Clock clock;
 
     @Autowired
-    public OvertimeViewController(OvertimeService overtimeService, PersonService personService,
-                                  OvertimeFormValidator validator, DepartmentService departmentService,
-                                  ApplicationService applicationService, VacationTypeViewModelService vacationTypeViewModelService,
-                                  SettingsService settingsService, Clock clock) {
+    OvertimeViewController(OvertimeService overtimeService, PersonService personService,
+                           OvertimeFormValidator validator, DepartmentService departmentService,
+                           ApplicationService applicationService, VacationTypeViewModelService vacationTypeViewModelService,
+                           SettingsService settingsService, Clock clock) {
         this.overtimeService = overtimeService;
         this.personService = personService;
         this.validator = validator;
@@ -99,7 +95,7 @@ public class OvertimeViewController implements HasLaunchpad {
 
     @GetMapping(value = "/overtime", params = "person")
     public String showOvertime(
-        @RequestParam(value = "person") Integer personId,
+        @RequestParam(value = "person") Long personId,
         @RequestParam(value = "year", required = false) Integer requestedYear, Model model)
         throws UnknownPersonException {
 
@@ -128,19 +124,20 @@ public class OvertimeViewController implements HasLaunchpad {
             overtimeService.getTotalOvertimeForPersonBeforeYear(person, selectedYear),
             overtimeService.getLeftOvertimeForPerson(person),
             signedInUser,
-            userIsAllowedToWriteOvertime);
+            userIsAllowedToWriteOvertime, selectedYear);
 
         model.addAttribute("records", overtimeListDto.getRecords());
         model.addAttribute("overtimeTotal", overtimeListDto.getOvertimeTotal());
         model.addAttribute("overtimeTotalLastYear", overtimeListDto.getOvertimeTotalLastYear());
         model.addAttribute("overtimeLeft", overtimeListDto.getOvertimeLeft());
         model.addAttribute("userIsAllowedToWriteOvertime", userIsAllowedToWriteOvertime);
+        model.addAttribute("departmentsOfPerson", departmentService.getAssignedDepartmentsOfMember(person));
 
         return "overtime/overtime_list";
     }
 
     @GetMapping("/overtime/{id}")
-    public String showOvertimeDetails(@PathVariable("id") Integer id, Model model) throws UnknownOvertimeException {
+    public String showOvertimeDetails(@PathVariable("id") Long id, Model model) throws UnknownOvertimeException {
 
         final Overtime overtime = overtimeService.getOvertimeById(id).orElseThrow(() -> new UnknownOvertimeException(id));
         final Person person = overtime.getPerson();
@@ -158,18 +155,23 @@ public class OvertimeViewController implements HasLaunchpad {
             overtimeService.getTotalOvertimeForPersonAndYear(person, overtime.getEndDate().getYear()),
             overtimeService.getLeftOvertimeForPerson(person));
 
+        final int currentYear = Year.now(clock).getValue();
+        model.addAttribute("currentYear", currentYear);
+
+
         model.addAttribute("record", overtimeDetailsDto.getRecord());
         model.addAttribute("comments", overtimeDetailsDto.getComments());
         model.addAttribute("overtimeTotal", overtimeDetailsDto.getOvertimeTotal());
         model.addAttribute("overtimeLeft", overtimeDetailsDto.getOvertimeLeft());
         model.addAttribute("userIsAllowedToWriteOvertime", overtimeService.isUserIsAllowedToWriteOvertime(signedInUser, person));
+        model.addAttribute("departmentsOfPerson", departmentService.getAssignedDepartmentsOfMember(person));
 
         return "overtime/overtime_details";
     }
 
     @GetMapping("/overtime/new")
     public String recordOvertime(
-        @RequestParam(value = "person", required = false) Integer personId, Model model)
+        @RequestParam(value = "person", required = false) Long personId, Model model)
         throws UnknownPersonException {
 
         final Person signedInUser = personService.getSignedInUser();
@@ -221,7 +223,7 @@ public class OvertimeViewController implements HasLaunchpad {
     }
 
     @GetMapping("/overtime/{id}/edit")
-    public String editOvertime(@PathVariable("id") Integer id, Model model) throws UnknownOvertimeException {
+    public String editOvertime(@PathVariable("id") Long id, Model model) throws UnknownOvertimeException {
 
         final Overtime overtime = overtimeService.getOvertimeById(id).orElseThrow(() -> new UnknownOvertimeException(id));
         final Person signedInUser = personService.getSignedInUser();
@@ -239,7 +241,7 @@ public class OvertimeViewController implements HasLaunchpad {
     }
 
     @PostMapping("/overtime/{id}")
-    public String updateOvertime(@PathVariable("id") Integer id,
+    public String updateOvertime(@PathVariable("id") Long id,
                                  @ModelAttribute("overtime") OvertimeForm overtimeForm, Errors errors,
                                  Model model, RedirectAttributes redirectAttributes) throws UnknownOvertimeException {
 
@@ -298,9 +300,8 @@ public class OvertimeViewController implements HasLaunchpad {
 
     private List<Application> getOvertimeAbsences(int year, Person person) {
         final LocalDate firstDayOfYear = Year.of(year).atDay(1);
-        final LocalDate lastDayOfYear = DateUtil.getLastDayOfYear(year);
+        final LocalDate lastDayOfYear = firstDayOfYear.with(lastDayOfYear());
 
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        return applicationService.getApplicationsStartingInACertainPeriodAndPersonAndVacationCategory(firstDayOfYear, lastDayOfYear, person, statuses, VacationCategory.OVERTIME);
+        return applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(firstDayOfYear, lastDayOfYear, person, activeStatuses(), OVERTIME);
     }
 }

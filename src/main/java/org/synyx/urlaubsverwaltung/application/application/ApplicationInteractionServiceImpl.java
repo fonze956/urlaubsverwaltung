@@ -6,21 +6,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.synyx.urlaubsverwaltung.absence.Absence;
-import org.synyx.urlaubsverwaltung.absence.AbsenceTimeConfiguration;
-import org.synyx.urlaubsverwaltung.absence.TimeSettings;
 import org.synyx.urlaubsverwaltung.account.AccountInteractionService;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationComment;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentService;
-import org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMapping;
-import org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingService;
-import org.synyx.urlaubsverwaltung.calendarintegration.CalendarSyncService;
 import org.synyx.urlaubsverwaltung.department.Department;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
-import org.synyx.urlaubsverwaltung.settings.SettingsService;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -33,6 +26,7 @@ import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.toList;
 import static org.slf4j.LoggerFactory.getLogger;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationForLeavePermissionEvaluator.isAllowedToCancelApplication;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationForLeavePermissionEvaluator.isAllowedToEditApplication;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.REJECTED;
@@ -46,7 +40,6 @@ import static org.synyx.urlaubsverwaltung.application.comment.ApplicationComment
 import static org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction.CANCEL_REQUESTED_DECLINED;
 import static org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction.EDITED;
 import static org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction.REVOKED;
-import static org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingType.VACATION;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 
 @Service
@@ -61,9 +54,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
     private final AccountInteractionService accountInteractionService;
     private final ApplicationCommentService commentService;
     private final ApplicationMailService applicationMailService;
-    private final CalendarSyncService calendarSyncService;
-    private final AbsenceMappingService absenceMappingService;
-    private final TimeSettings timeSettings;
     private final DepartmentService departmentService;
     private final Clock clock;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -73,9 +63,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
                                       ApplicationCommentService commentService,
                                       AccountInteractionService accountInteractionService,
                                       ApplicationMailService applicationMailService,
-                                      CalendarSyncService calendarSyncService,
-                                      AbsenceMappingService absenceMappingService,
-                                      SettingsService settingsService,
                                       DepartmentService departmentService, Clock clock,
                                       ApplicationEventPublisher applicationEventPublisher) {
 
@@ -83,9 +70,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
         this.commentService = commentService;
         this.accountInteractionService = accountInteractionService;
         this.applicationMailService = applicationMailService;
-        this.calendarSyncService = calendarSyncService;
-        this.absenceMappingService = absenceMappingService;
-        this.timeSettings = settingsService.getSettings().getTimeSettings();
         this.departmentService = departmentService;
         this.clock = clock;
         this.applicationEventPublisher = applicationEventPublisher;
@@ -132,13 +116,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
 
         // update remaining vacation days (if there is already a holidays account for next year)
         accountInteractionService.updateRemainingVacationDays(savedApplication.getStartDate().getYear(), person);
-
-        if (calendarSyncService.isRealProviderConfigured()) {
-            final AbsenceTimeConfiguration absenceTimeConfiguration = new AbsenceTimeConfiguration(timeSettings);
-            final Absence absence = new Absence(savedApplication.getPerson(), savedApplication.getPeriod(), absenceTimeConfiguration);
-            calendarSyncService.addAbsence(absence)
-                .ifPresent(eventId -> absenceMappingService.create(savedApplication.getId(), VACATION, eventId));
-        }
 
         applicationEventPublisher.publishEvent(ApplicationAppliedEvent.of(savedApplication));
         return savedApplication;
@@ -211,12 +188,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
         // TODO - wann brachen wir das? Nur wenn die category HOLIDAY ist?
         accountInteractionService.updateRemainingVacationDays(savedApplication.getStartDate().getYear(), person);
 
-        if (calendarSyncService.isRealProviderConfigured()) {
-            final AbsenceTimeConfiguration absenceTimeConfiguration = new AbsenceTimeConfiguration(timeSettings);
-            final Absence absence = new Absence(savedApplication.getPerson(), savedApplication.getPeriod(), absenceTimeConfiguration);
-            calendarSyncService.addAbsence(absence)
-                .ifPresent(eventId -> absenceMappingService.create(savedApplication.getId(), VACATION, eventId));
-        }
         applicationEventPublisher.publishEvent(ApplicationAllowedEvent.of(savedApplication));
         return savedApplication;
     }
@@ -296,12 +267,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
             applicationMailService.notifyHolidayReplacementAboutCancellation(holidayReplacement, savedApplication);
         }
 
-        final Optional<AbsenceMapping> absenceMapping = absenceMappingService.getAbsenceByIdAndType(savedApplication.getId(), VACATION);
-        if (absenceMapping.isPresent()) {
-            calendarSyncService.deleteAbsence(absenceMapping.get().getEventId());
-            absenceMappingService.delete(absenceMapping.get());
-        }
-
         applicationEventPublisher.publishEvent(ApplicationRejectedEvent.of(savedApplication));
         return application;
     }
@@ -322,12 +287,6 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
         }
 
         accountInteractionService.updateRemainingVacationDays(application.getStartDate().getYear(), person);
-
-        final Optional<AbsenceMapping> absenceMapping = absenceMappingService.getAbsenceByIdAndType(application.getId(), VACATION);
-        if (absenceMapping.isPresent()) {
-            calendarSyncService.deleteAbsence(absenceMapping.get().getEventId());
-            absenceMappingService.delete(absenceMapping.get());
-        }
 
         return application;
     }
@@ -494,14 +453,14 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
     }
 
     @Override
-    public Optional<Application> get(Integer applicationId) {
+    public Optional<Application> get(Long applicationId) {
         return applicationService.getApplicationById(applicationId);
     }
 
     @Override
-    public Application edit(Application oldApplication, Application editedApplication, Person person, Optional<String> comment) {
+    public Application edit(Application oldApplication, Application editedApplication, Person editor, Optional<String> comment) {
 
-        if (oldApplication.getStatus().compareTo(WAITING) != 0) {
+        if (!isAllowedToEditApplication(oldApplication, editor)) {
             throw new EditApplicationForLeaveNotAllowedException(format("Cannot edit application for leave " +
                 "with id %d because the status is %s and not waiting.", oldApplication.getId(), oldApplication.getStatus()));
         }
@@ -510,13 +469,12 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
             throw new EditApplicationForLeaveNotAllowedException("Cannot change person of exiting application during edit.");
         }
 
-        editedApplication.setStatus(WAITING);
         editedApplication.setEditedDate(LocalDate.now(clock));
         final Application savedEditedApplication = applicationService.save(editedApplication);
 
-        commentService.create(savedEditedApplication, EDITED, comment, person);
+        commentService.create(savedEditedApplication, EDITED, comment, editor);
 
-        applicationMailService.sendEditedNotification(savedEditedApplication, person);
+        applicationMailService.sendEditedNotification(savedEditedApplication, editor);
 
         final List<HolidayReplacementEntity> addedReplacements = replacementAdded(oldApplication, savedEditedApplication);
         final List<HolidayReplacementEntity> deletedReplacements = replacementDeleted(oldApplication, savedEditedApplication);
@@ -526,7 +484,7 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
             final List<HolidayReplacementEntity> stillExistingReplacements = savedEditedApplication.getHolidayReplacements()
                 .stream()
                 .filter(oldReplacements::contains)
-                .collect(toList());
+                .toList();
             for (HolidayReplacementEntity replacement : stillExistingReplacements) {
                 applicationMailService.notifyHolidayReplacementAboutEdit(replacement, savedEditedApplication);
             }
@@ -552,18 +510,11 @@ class ApplicationInteractionServiceImpl implements ApplicationInteractionService
      */
     @EventListener
     void deleteAllByPerson(PersonDeletedEvent event) {
-        final Person personToBeDeleted = event.getPerson();
+        final Person personToBeDeleted = event.person();
         commentService.deleteByApplicationPerson(personToBeDeleted);
         commentService.deleteCommentAuthor(personToBeDeleted);
 
         final List<Application> deletedApplications = applicationService.deleteApplicationsByPerson(personToBeDeleted);
-
-        deletedApplications.forEach(application -> absenceMappingService.getAbsenceByIdAndType(application.getId(), VACATION)
-            .ifPresent(absenceMapping -> {
-                calendarSyncService.deleteAbsence(absenceMapping.getEventId());
-                absenceMappingService.delete(absenceMapping);
-            })
-        );
 
         applicationService.deleteInteractionWithApplications(personToBeDeleted);
 

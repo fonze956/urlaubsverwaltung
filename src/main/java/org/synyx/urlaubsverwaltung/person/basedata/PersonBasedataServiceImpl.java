@@ -23,13 +23,13 @@ class PersonBasedataServiceImpl implements PersonBasedataService {
     }
 
     @Override
-    public Optional<PersonBasedata> getBasedataByPersonId(int personId) {
+    public Optional<PersonBasedata> getBasedataByPersonId(long personId) {
         return personBasedataRepository.findById(personId)
             .map(PersonBasedataMapper::mapFromEntity);
     }
 
     @Override
-    public Map<PersonId, PersonBasedata> getBasedataByPersonId(List<Integer> personIds) {
+    public Map<PersonId, PersonBasedata> getBasedataByPersonId(List<Long> personIds) {
         return personBasedataRepository.findAllByPersonIdIsIn(personIds).stream()
             .map(PersonBasedataMapper::mapFromEntity)
             .collect(toMap(PersonBasedata::getPersonId, identity()));
@@ -47,6 +47,6 @@ class PersonBasedataServiceImpl implements PersonBasedataService {
      */
     @EventListener
     void delete(PersonDeletedEvent event) {
-        personBasedataRepository.deleteByPerson(event.getPerson());
+        personBasedataRepository.deleteByPerson(event.person());
     }
 }

@@ -11,7 +11,7 @@ class DetailsDropdown extends HTMLDetailsElement {
           // otherwise we would prevent a form submit for instance.
           event.preventDefault();
         }
-        if (target.tagName === "SUMMARY" || target.closest("summary")) {
+        if (target.closest("summary")) {
           this.open = !this.open;
         }
       } else if (target !== this) {
@@ -28,11 +28,14 @@ class DetailsDropdown extends HTMLDetailsElement {
 
     const handleFocusOut = (event) => {
       if (event.target.tagName !== "SUMMARY") {
-        setTimeout(() => {
-          if (!this.matches(":focus-within") && (document.activeElement !== document.body || !contentClicked)) {
-            this.open = false;
-          }
-        }, Number(this.dataset.closeDelay ?? 0));
+        setTimeout(
+          () => {
+            if (!this.matches(":focus-within") && (document.activeElement !== document.body || !contentClicked)) {
+              this.open = false;
+            }
+          },
+          Number(this.dataset.closeDelay ?? 0),
+        );
       }
     };
 
@@ -52,10 +55,21 @@ class DetailsDropdown extends HTMLDetailsElement {
   }
 }
 
-const interactiveElements = [HTMLButtonElement, HTMLInputElement, HTMLSelectElement, HTMLTextAreaElement];
+const interactiveElements = [
+  HTMLButtonElement,
+  HTMLInputElement,
+  HTMLSelectElement,
+  HTMLTextAreaElement,
+  HTMLAnchorElement,
+];
 
 function isInteractiveElement(element) {
-  return interactiveElements.some((ElementType) => element instanceof ElementType);
+  if (element === undefined || element === null) {
+    return false;
+  }
+
+  let isInteractive = interactiveElements.some((ElementType) => element instanceof ElementType);
+  return isInteractive === true ? true : isInteractiveElement(element.parentElement);
 }
 
 customElements.define("uv-details-dropdown", DetailsDropdown, { extends: "details" });

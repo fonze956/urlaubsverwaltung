@@ -27,11 +27,17 @@ import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_E
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_CONVERTED;
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_EDITED;
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_HOLIDAY_REPLACEMENT;
-import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_HOLIDAY_REPLACEMENT_UPCOMING;
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_REJECTED;
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_REVOKED;
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_TEMPORARY_ALLOWED;
 import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_APPLICATION_UPCOMING;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_ACCEPTED_BY_MANAGEMENT_TO_USER;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_CANCELLED_BY_MANAGEMENT;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_COLLEAGUES_CANCELLED;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_COLLEAGUES_CREATED;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_CREATED_BY_MANAGEMENT;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_EDITED_BY_MANAGEMENT;
+import static org.synyx.urlaubsverwaltung.person.MailNotification.NOTIFICATION_EMAIL_SICK_NOTE_SUBMITTED_BY_USER_TO_USER;
 import static org.synyx.urlaubsverwaltung.person.Role.INACTIVE;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.USER;
@@ -73,7 +79,13 @@ class PersonServiceImpl implements PersonService {
             NOTIFICATION_EMAIL_APPLICATION_CONVERTED,
             NOTIFICATION_EMAIL_APPLICATION_UPCOMING,
             NOTIFICATION_EMAIL_APPLICATION_HOLIDAY_REPLACEMENT,
-            NOTIFICATION_EMAIL_APPLICATION_HOLIDAY_REPLACEMENT_UPCOMING
+            NOTIFICATION_EMAIL_SICK_NOTE_SUBMITTED_BY_USER_TO_USER,
+            NOTIFICATION_EMAIL_SICK_NOTE_CREATED_BY_MANAGEMENT,
+            NOTIFICATION_EMAIL_SICK_NOTE_ACCEPTED_BY_MANAGEMENT_TO_USER,
+            NOTIFICATION_EMAIL_SICK_NOTE_EDITED_BY_MANAGEMENT,
+            NOTIFICATION_EMAIL_SICK_NOTE_CANCELLED_BY_MANAGEMENT,
+            NOTIFICATION_EMAIL_SICK_NOTE_COLLEAGUES_CREATED,
+            NOTIFICATION_EMAIL_SICK_NOTE_COLLEAGUES_CANCELLED
         );
 
         final List<Role> defaultPermissions = List.of(
@@ -87,7 +99,7 @@ class PersonServiceImpl implements PersonService {
     public Person create(String username, String firstName, String lastName, String email,
                          List<MailNotification> notifications, List<Role> permissions) {
 
-        final Person person = new Person(username, lastName, firstName, email);
+        final Person person = normalizePerson(new Person(username, lastName, firstName, email));
         person.setNotifications(notifications);
         person.setPermissions(permissions);
 
@@ -109,7 +121,7 @@ class PersonServiceImpl implements PersonService {
             throw new IllegalArgumentException("Can not update a person that is not persisted yet");
         }
 
-        final Person updatedPerson = personRepository.save(person);
+        final Person updatedPerson = personRepository.save(normalizePerson(person));
         LOG.info("Updated person: {}", updatedPerson);
 
         if (updatedPerson.isInactive()) {
@@ -139,18 +151,18 @@ class PersonServiceImpl implements PersonService {
     }
 
     @Override
-    public Optional<Person> getPersonByID(Integer id) {
+    public Optional<Person> getPersonByID(Long id) {
         return personRepository.findById(id);
     }
 
     @Override
     public Optional<Person> getPersonByUsername(String username) {
-        return personRepository.findByUsername(username);
+        return personRepository.findByUsernameIgnoreCase(username);
     }
 
     @Override
     public Optional<Person> getPersonByMailAddress(String mailAddress) {
-        return personRepository.findByEmail(mailAddress);
+        return personRepository.findByEmailIgnoreCase(mailAddress);
     }
 
     @Override
@@ -235,8 +247,23 @@ class PersonServiceImpl implements PersonService {
     }
 
     @Override
-    public int numberOfPersonsWithOfficeRoleExcludingPerson(int excludingId) {
+    public int numberOfPersonsWithOfficeRoleExcludingPerson(long excludingId) {
         return personRepository.countByPermissionsContainingAndIdNotIn(OFFICE, List.of(excludingId));
+    }
+
+    private Person normalizePerson(Person person) {
+        final Person normalized = new Person();
+
+        normalized.setUsername(person.getUsername().strip());
+        normalized.setLastName(person.getLastName().strip());
+        normalized.setFirstName(person.getFirstName().strip());
+        normalized.setEmail(person.getEmail().strip());
+
+        normalized.setId(person.getId());
+        normalized.setPermissions(person.getPermissions());
+        normalized.setNotifications(person.getNotifications());
+
+        return normalized;
     }
 
     private static Sort mapToImplicitPersonSort(Sort requestedSort) {

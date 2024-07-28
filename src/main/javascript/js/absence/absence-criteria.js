@@ -1,90 +1,126 @@
 export const noWorkdayCriteria = {
-  type: "NO_WORKDAY",
+  absenceType: "NO_WORKDAY",
 };
 
 export const holidayFullWaitingCriteria = {
-  type: "VACATION",
-  absencePeriodName: "FULL",
+  absenceType: "VACATION",
+  absent: "FULL",
   status: "WAITING",
 };
 
 export const holidayFullTemporaryCriteria = {
-  type: "VACATION",
-  absencePeriodName: "FULL",
+  absenceType: "VACATION",
+  absent: "FULL",
   status: "TEMPORARY_ALLOWED",
 };
 
 export const holidayFullApprovedCriteria = {
-  type: "VACATION",
-  absencePeriodName: "FULL",
+  absenceType: "VACATION",
+  absent: "FULL",
   status: "ALLOWED",
 };
 
 export const holidayFullCancellationRequestedCriteria = {
-  type: "VACATION",
-  absencePeriodName: "FULL",
+  absenceType: "VACATION",
+  absent: "FULL",
   status: "ALLOWED_CANCELLATION_REQUESTED",
 };
 
 export const holidayMorningWaitingCriteria = {
-  type: "VACATION",
-  absencePeriodName: "MORNING",
+  absenceType: "VACATION",
+  absent: "MORNING",
   status: "WAITING",
 };
 
 export const holidayMorningTemporaryCriteria = {
-  type: "VACATION",
-  absencePeriodName: "MORNING",
+  absenceType: "VACATION",
+  absent: "MORNING",
   status: "TEMPORARY_ALLOWED",
 };
 
 export const holidayMorningApprovedCriteria = {
-  type: "VACATION",
-  absencePeriodName: "MORNING",
+  absenceType: "VACATION",
+  absent: "MORNING",
   status: "ALLOWED",
 };
 
 export const holidayMorningCancellationRequestedCriteria = {
-  type: "VACATION",
-  absencePeriodName: "MORNING",
+  absenceType: "VACATION",
+  absent: "MORNING",
   status: "ALLOWED_CANCELLATION_REQUESTED",
 };
 
 export const holidayNoonWaitingCriteria = {
-  type: "VACATION",
-  absencePeriodName: "NOON",
+  absenceType: "VACATION",
+  absent: "NOON",
   status: "WAITING",
 };
 
 export const holidayNoonTemporaryCriteria = {
-  type: "VACATION",
-  absencePeriodName: "NOON",
+  absenceType: "VACATION",
+  absent: "NOON",
   status: "TEMPORARY_ALLOWED",
 };
 
 export const holidayNoonApprovedCriteria = {
-  type: "VACATION",
-  absencePeriodName: "NOON",
+  absenceType: "VACATION",
+  absent: "NOON",
   status: "ALLOWED",
 };
 
 export const holidayNoonCancellationRequestedCriteria = {
-  type: "VACATION",
-  absencePeriodName: "NOON",
+  absenceType: "VACATION",
+  absent: "NOON",
   status: "ALLOWED_CANCELLATION_REQUESTED",
 };
 
 export const sickNoteMorningCriteria = {
-  type: "SICK_NOTE",
-  absencePeriodName: "MORNING",
+  absenceType: "SICK_NOTE",
+  absent: "MORNING",
+};
+
+export const sickNoteMorningWaitingCriteria = {
+  absenceType: "SICK_NOTE",
+  absent: "MORNING",
+  status: "WAITING",
+};
+
+export const sickNoteMorningActiveCriteria = {
+  absenceType: "SICK_NOTE",
+  absent: "MORNING",
+  status: "ACTIVE",
 };
 
 export const sickNoteNoonCriteria = {
-  type: "SICK_NOTE",
-  absencePeriodName: "NOON",
+  absenceType: "SICK_NOTE",
+  absent: "NOON",
+};
+
+export const sickNoteNoonWaitingCriteria = {
+  absenceType: "SICK_NOTE",
+  absent: "NOON",
+  status: "WAITING",
+};
+
+export const sickNoteNoonActiveCriteria = {
+  absenceType: "SICK_NOTE",
+  absent: "NOON",
+  status: "ACTIVE",
 };
 
 export const sickNoteFullCriteria = {
-  type: "SICK_NOTE",
-  absencePeriodName: "FULL",
+  absenceType: "SICK_NOTE",
+  absent: "FULL",
+};
+
+export const sickNoteFullWaitingCriteria = {
+  absenceType: "SICK_NOTE",
+  absent: "FULL",
+  status: "WAITING",
+};
+
+export const sickNoteFullActiveCriteria = {
+  absenceType: "SICK_NOTE",
+  absent: "FULL",
+  status: "ACTIVE",
 };

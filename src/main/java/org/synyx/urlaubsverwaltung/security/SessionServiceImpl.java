@@ -10,7 +10,7 @@ import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
 import java.util.Map;
 
 @Service
-public class SessionServiceImpl<S extends Session> implements SessionService {
+class SessionServiceImpl<S extends Session> implements SessionService {
 
     static final String RELOAD_AUTHORITIES = "reloadAuthorities";
 
@@ -39,7 +39,7 @@ public class SessionServiceImpl<S extends Session> implements SessionService {
 
     @EventListener
     void deleteSessionByEvent(PersonDeletedEvent event) {
-        sessionRepository.findByPrincipalName(event.getPerson().getUsername())
+        sessionRepository.findByPrincipalName(event.person().getUsername())
             .forEach((s, session) -> sessionRepository.deleteById(session.getId()));
     }
 }

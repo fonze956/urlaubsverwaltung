@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * Repository for {@link SickNoteEntity} entities.
  */
-interface SickNoteRepository extends CrudRepository<SickNoteEntity, Integer> {
+interface SickNoteRepository extends CrudRepository<SickNoteEntity, Long> {
 
     @Query(
         "SELECT x FROM SickNoteEntity x WHERE x.person = ?1 AND "
@@ -27,18 +27,23 @@ interface SickNoteRepository extends CrudRepository<SickNoteEntity, Integer> {
     Long findNumberOfPersonsWithMinimumOneSickNote(int year);
 
     // NOTE: Only needed to send email after certain duration of a sick note
-    @Query("SELECT x " +
-        "FROM SickNoteEntity x " +
-        "WHERE DATEDIFF(x.endDate, x.startDate) + 1 > :maximumSickPayDays " +
-        "AND :today >= ADDDATE(x.startDate, (:maximumSickPayDays - :daysBeforeEndOfSickPayNotification - 1)) " +
-        "AND x.status = 'ACTIVE' " +
-        "AND x.endOfSickPayNotificationSend IS NULL"
+    @Query(value = """
+        SELECT *
+        FROM sick_note
+        WHERE (end_date - start_date) + 1 > ?1
+        AND ?3 >= (start_date + ((?1 - ?2 - 1) * interval '1 day'))
+        AND status = 'ACTIVE'
+        AND (end_of_sick_pay_notification_send IS NULL)
+        """
+        , nativeQuery = true
     )
     List<SickNoteEntity> findSickNotesToNotifyForSickPayEnd(
         @Param("maximumSickPayDays") int maximumSickPayDays,
         @Param("daysBeforeEndOfSickPayNotification") int daysBeforeEndOfSickPayNotification,
         @Param("today") LocalDate today
     );
+
+    List<SickNoteEntity> findByStatusInAndPersonIn(List<SickNoteStatus> sickNoteStatuses, List<Person> persons);
 
     List<SickNoteEntity> findByStatusInAndEndDateGreaterThanEqual(List<SickNoteStatus> openSickNoteStatuses, LocalDate since);
 
@@ -54,4 +59,5 @@ interface SickNoteRepository extends CrudRepository<SickNoteEntity, Integer> {
     List<SickNoteEntity> deleteByPerson(Person person);
 
     List<SickNoteEntity> findByApplier(Person applier);
+
 }

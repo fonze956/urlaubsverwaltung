@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeService;
 import org.synyx.urlaubsverwaltung.person.Person;
@@ -29,8 +30,6 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.HOLIDAY;
-import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.YELLOW;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicationForLeaveStatisticsCsvExportServiceTest {
@@ -62,10 +61,9 @@ class ApplicationForLeaveStatisticsCsvExportServiceTest {
         final Person person = new Person();
         person.setFirstName("personOneFirstName");
         person.setLastName("personOneLastName");
-        final PersonBasedata basedata = new PersonBasedata(new PersonId(-1), "42", "OneInformation");
+        final PersonBasedata basedata = new PersonBasedata(new PersonId((long) -1), "42", "OneInformation");
 
-        final VacationType vacationType = new VacationType(1, true, HOLIDAY, "holiday", true, YELLOW, false);
-
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource).id(1L).messageKey("holiday").build();
         final ApplicationForLeaveStatistics applicationForLeaveStatistics = new ApplicationForLeaveStatistics(person, List.of(vacationType));
         applicationForLeaveStatistics.setPersonBasedata(basedata);
         applicationForLeaveStatistics.setLeftVacationDaysForPeriod(BigDecimal.valueOf(10));
@@ -85,7 +83,7 @@ class ApplicationForLeaveStatisticsCsvExportServiceTest {
         addMessageSource("applications.statistics.total", locale);
         addMessageSource("person.account.basedata.personnelNumber", locale);
         addMessageSource("person.account.basedata.additionalInformation", locale);
-        addMessageSource(vacationType.getMessageKey(), locale);
+        addMessageSource("holiday", locale);
 
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
@@ -109,15 +107,14 @@ class ApplicationForLeaveStatisticsCsvExportServiceTest {
         final Person personOne = new Person();
         personOne.setFirstName("personOneFirstName");
         personOne.setLastName("personOneLastName");
-        final PersonBasedata basedataOne = new PersonBasedata(new PersonId(-1), "42", "OneInformation");
+        final PersonBasedata basedataOne = new PersonBasedata(new PersonId(-1L), "42", "OneInformation");
 
         final Person personTwo = new Person();
         personTwo.setFirstName("personTwoFirstName");
         personTwo.setLastName("personTwoLastName");
-        final PersonBasedata basedataTwo = new PersonBasedata(new PersonId(-1), "42", "SecondInformation");
+        final PersonBasedata basedataTwo = new PersonBasedata(new PersonId(-1L), "42", "SecondInformation");
 
-        final VacationType vacationType = new VacationType(1, true, HOLIDAY, "holiday", true, YELLOW, false);
-
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource).id(1L).messageKey("holiday").build();
         final ApplicationForLeaveStatistics personOneStatistics = new ApplicationForLeaveStatistics(personOne, List.of(vacationType));
         personOneStatistics.setPersonBasedata(basedataOne);
         personOneStatistics.addWaitingVacationDays(vacationType, ONE);
@@ -142,7 +139,7 @@ class ApplicationForLeaveStatisticsCsvExportServiceTest {
         addMessageSource("applications.statistics.total", locale);
         addMessageSource("person.account.basedata.personnelNumber", locale);
         addMessageSource("person.account.basedata.additionalInformation", locale);
-        addMessageSource(vacationType.getMessageKey(), locale);
+        addMessageSource("holiday", locale);
 
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 

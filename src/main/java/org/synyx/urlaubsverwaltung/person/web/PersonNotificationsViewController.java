@@ -23,6 +23,7 @@ import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonId;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.person.UnknownPersonException;
+import org.synyx.urlaubsverwaltung.settings.SettingsService;
 
 import java.util.List;
 import java.util.Objects;
@@ -51,22 +52,24 @@ public class PersonNotificationsViewController implements HasLaunchpad {
     private final PersonNotificationsDtoValidator validator;
     private final UserNotificationSettingsService userNotificationSettingsService;
     private final DepartmentService departmentService;
+    private final SettingsService settingsService;
 
     @Autowired
     PersonNotificationsViewController(PersonService personService,
                                       PersonNotificationsDtoValidator validator,
                                       UserNotificationSettingsService userNotificationSettingsService,
-                                      DepartmentService departmentService) {
+                                      DepartmentService departmentService, SettingsService settingsService) {
 
         this.personService = personService;
         this.validator = validator;
         this.userNotificationSettingsService = userNotificationSettingsService;
         this.departmentService = departmentService;
+        this.settingsService = settingsService;
     }
 
     @GetMapping("/person/{personId}/notifications")
     @PreAuthorize("hasAuthority('OFFICE') or @userApiMethodSecurity.isSamePersonId(authentication, #personId)")
-    public String showPersonNotifications(@PathVariable int personId, Model model) throws UnknownPersonException {
+    public String showPersonNotifications(@PathVariable long personId, Model model) throws UnknownPersonException {
         return showNotifications(false, personId, model);
     }
 
@@ -76,7 +79,7 @@ public class PersonNotificationsViewController implements HasLaunchpad {
         return showNotifications(true, personId, model);
     }
 
-    private String showNotifications(boolean isDepartmentSection, int personId, Model model) throws UnknownPersonException {
+    private String showNotifications(boolean isDepartmentSection, long personId, Model model) throws UnknownPersonException {
 
         final Person person = personService.getPersonByID(personId)
             .orElseThrow(() -> new UnknownPersonException(personId));
@@ -87,7 +90,8 @@ public class PersonNotificationsViewController implements HasLaunchpad {
 
         final UserNotificationSettings notificationSettings = userNotificationSettingsService.findNotificationSettings(new PersonId(person.getId()));
 
-        final PersonNotificationsDto personNotificationsDto = mapToPersonNotificationsDto(person);
+        final boolean userIsAllowedToSubmitSickNotes = settingsService.getSettings().getSickNoteSettings().getUserIsAllowedToSubmitSickNotes();
+        final PersonNotificationsDto personNotificationsDto = mapToPersonNotificationsDto(person, userIsAllowedToSubmitSickNotes);
         personNotificationsDto.setRestrictToDepartments(new PersonNotificationDto(person.hasAnyRole(OFFICE, BOSS), notificationSettings.isRestrictToDepartments()));
 
         model.addAttribute("isViewingOwnNotifications", Objects.equals(person.getId(), signedInUser.getId()));
@@ -119,7 +123,7 @@ public class PersonNotificationsViewController implements HasLaunchpad {
 
     @PostMapping("/person/{personId}/notifications/departments")
     @PreAuthorize("hasAuthority('OFFICE') or @userApiMethodSecurity.isSamePersonId(authentication, #personId)")
-    public String editDepartmentsNotifications(@PathVariable int personId,
+    public String editDepartmentsNotifications(@PathVariable long personId,
                                                @ModelAttribute PersonNotificationsDto newPersonNotificationsDto,
                                                Errors errors,
                                                Model model,
@@ -128,7 +132,7 @@ public class PersonNotificationsViewController implements HasLaunchpad {
     }
 
 
-    private String editNotifications(boolean isDepartmentSection, int personId, PersonNotificationsDto newPersonNotificationsDto, Errors errors,
+    private String editNotifications(boolean isDepartmentSection, long personId, PersonNotificationsDto newPersonNotificationsDto, Errors errors,
                                      Model model, RedirectAttributes redirectAttributes, String section) throws UnknownPersonException {
 
         final Person person = personService.getPersonByID(personId)
@@ -143,7 +147,8 @@ public class PersonNotificationsViewController implements HasLaunchpad {
             LOG.error("Could not save e-mail-notifications of user {}", person.getId());
 
             final PersonNotificationsDto mergedPersonNotificationsDto = new PersonNotificationsDto();
-            BeanUtils.copyProperties(mapToPersonNotificationsDto(person), mergedPersonNotificationsDto);
+            final boolean userIsAllowedToSubmitSickNotes = settingsService.getSettings().getSickNoteSettings().getUserIsAllowedToSubmitSickNotes();
+            BeanUtils.copyProperties(mapToPersonNotificationsDto(person, userIsAllowedToSubmitSickNotes), mergedPersonNotificationsDto);
             model.addAttribute("personNotificationsDto", mergedPersonNotificationsDto);
             model.addAttribute("error", true);
 

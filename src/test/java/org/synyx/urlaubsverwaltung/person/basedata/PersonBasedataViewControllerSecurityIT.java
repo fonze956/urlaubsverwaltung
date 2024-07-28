@@ -1,10 +1,12 @@
 package org.synyx.urlaubsverwaltung.person.basedata;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.context.WebApplicationContext;
@@ -16,6 +18,7 @@ import java.util.Optional;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -37,67 +40,37 @@ class PersonBasedataViewControllerSecurityIT extends TestContainersBase {
 
     @Test
     void ensuresUnauthorizedPersonCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
+        perform(
+            get("/web/person/1/basedata")
+        )
             .andExpect(status().is3xxRedirection())
-            .andExpect(redirectedUrl("http://localhost/login"));
+            .andExpect(redirectedUrl("http://localhost/oauth2/authorization/default"));
     }
 
-    @Test
-    @WithMockUser(authorities = "USER")
-    void ensuresAuthorizedPersonWithoutRoleCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
+    @ParameterizedTest
+    @ValueSource(strings = {"DEPARTMENT_HEAD", "SECOND_STAGE_AUTHORITY", "BOSS", "INACTIVE", "USER"})
+    void ensuresAuthorizedPersonWithIncorrectRoleCannotAccess(final String role) throws Exception {
+        perform(get("/web/person/1/basedata")
+            .with(oidcLogin().authorities(new SimpleGrantedAuthority("USER"), new SimpleGrantedAuthority(role))))
             .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(authorities = {"USER", "DEPARTMENT_HEAD"})
-    void ensuresAuthorizedPersonWithDepartmentHeadCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "SECOND_STAGE_AUTHORITY"})
-    void ensuresAuthorizedPersonWithSecondStageAuthorityCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "BOSS"})
-    void ensuresAuthorizedPersonWithBossRoleCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "ADMIN"})
-    void ensuresAuthorizedPersonWithAdminRoleCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "INACTIVE"})
-    void ensuresAuthorizedPersonWithInactiveRoleCannotAccess() throws Exception {
-        perform(get("/web/person/1/basedata"))
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "OFFICE"})
     void ensuresAuthorizedPersonWithOfficeRoleCanAccess() throws Exception {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
 
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(personBasedataService.getBasedataByPersonId(1)).thenReturn(Optional.empty());
         when(personService.getSignedInUser()).thenReturn(person);
 
-        perform(get("/web/person/1/basedata"))
+        perform(get("/web/person/1/basedata")
+            .with(oidcLogin().authorities(new SimpleGrantedAuthority("USER"), new SimpleGrantedAuthority("OFFICE")))
+        )
             .andExpect(status().isOk())
-            .andExpect(view().name("person/person-basedata"));
+            .andExpect(view().name("person/person-basedata")
+            );
     }
 
     @Test
@@ -107,74 +80,25 @@ class PersonBasedataViewControllerSecurityIT extends TestContainersBase {
                 .with(csrf())
         )
             .andExpect(status().is3xxRedirection())
-            .andExpect(redirectedUrl("http://localhost/login"));
+            .andExpect(redirectedUrl("http://localhost/oauth2/authorization/default"));
     }
 
-    @Test
-    @WithMockUser(authorities = "USER")
-    void ensuresAuthorizedPersonWithoutRoleCannotPost() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"DEPARTMENT_HEAD", "SECOND_STAGE_AUTHORITY", "BOSS", "INACTIVE", "USER"})
+    void ensuresAuthorizedPersonWithoutRoleCannotPost(final String role) throws Exception {
         perform(
             post("/web/person/1/basedata")
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("USER"), new SimpleGrantedAuthority(role)))
                 .with(csrf())
         )
             .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(authorities = {"USER", "DEPARTMENT_HEAD"})
-    void ensuresAuthorizedPersonWithDepartmentHeadCannotPost() throws Exception {
-        perform(
-            post("/web/person/1/basedata")
-                .with(csrf())
-        )
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "SECOND_STAGE_AUTHORITY"})
-    void ensuresAuthorizedPersonWithSecondStageAuthorityCannotPost() throws Exception {
-        perform(
-            post("/web/person/1/basedata")
-                .with(csrf())
-        )
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "BOSS"})
-    void ensuresAuthorizedPersonWithBossRoleCannotPost() throws Exception {
-        perform(
-            post("/web/person/1/basedata")
-                .with(csrf())
-        )
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "ADMIN"})
-    void ensuresAuthorizedPersonWithAdminRoleCannotPost() throws Exception {
-        perform(
-            post("/web/person/1/basedata")
-                .with(csrf())
-        )
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "INACTIVE"})
-    void ensuresAuthorizedPersonWithInactiveRoleCannotPost() throws Exception {
-        perform(
-            post("/web/person/1/basedata")
-                .with(csrf())
-        )
-            .andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(authorities = {"USER", "OFFICE"})
     void ensuresAuthorizedPersonWithOfficeRoleCanPost() throws Exception {
         perform(
             post("/web/person/1/basedata")
+                .with(oidcLogin().authorities(new SimpleGrantedAuthority("USER"), new SimpleGrantedAuthority("OFFICE")))
                 .param("personnelNumber", "1337")
                 .param("additionalInfo", "Additional Information")
                 .with(csrf())

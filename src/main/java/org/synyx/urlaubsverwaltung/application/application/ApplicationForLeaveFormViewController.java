@@ -22,7 +22,6 @@ import org.synyx.urlaubsverwaltung.application.specialleave.SpecialLeaveSettings
 import org.synyx.urlaubsverwaltung.application.specialleave.SpecialLeaveSettingsService;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeDto;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypePropertyEditor;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeService;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeViewModelService;
 import org.synyx.urlaubsverwaltung.department.Department;
@@ -32,6 +31,7 @@ import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.person.Role;
 import org.synyx.urlaubsverwaltung.person.web.PersonPropertyEditor;
+import org.synyx.urlaubsverwaltung.settings.Settings;
 import org.synyx.urlaubsverwaltung.settings.SettingsService;
 import org.synyx.urlaubsverwaltung.web.DateFormatAware;
 import org.synyx.urlaubsverwaltung.web.DecimalNumberPropertyEditor;
@@ -43,6 +43,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Year;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -57,15 +58,11 @@ import static java.util.Optional.ofNullable;
 import static java.util.function.Predicate.isEqual;
 import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.toList;
-import static java.util.stream.Collectors.toUnmodifiableList;
 import static java.util.stream.Stream.concat;
 import static org.slf4j.LoggerFactory.getLogger;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationMapper.mapToApplication;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationMapper.merge;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationForLeavePermissionEvaluator.isAllowedToEditApplication;
 import static org.synyx.urlaubsverwaltung.application.application.SpecialLeaveDtoMapper.mapToSpecialLeaveSettingsDto;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OVERTIME;
-import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeServiceImpl.convert;
 import static org.synyx.urlaubsverwaltung.person.Role.APPLICATION_ADD;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
@@ -96,6 +93,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
     private final DateFormatAware dateFormatAware;
     private final Clock clock;
     private final SpecialLeaveSettingsService specialLeaveSettingsService;
+    private final ApplicationMapper applicationMapper;
 
     @Autowired
     ApplicationForLeaveFormViewController(PersonService personService, DepartmentService departmentService, AccountService accountService,
@@ -103,7 +101,8 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
                                           VacationTypeViewModelService vacationTypeViewModelService, ApplicationInteractionService applicationInteractionService,
                                           ApplicationForLeaveFormValidator applicationForLeaveFormValidator,
                                           SettingsService settingsService, DateFormatAware dateFormatAware,
-                                          Clock clock, SpecialLeaveSettingsService specialLeaveSettingsService) {
+                                          Clock clock, SpecialLeaveSettingsService specialLeaveSettingsService,
+                                          ApplicationMapper applicationMapper) {
         this.personService = personService;
         this.departmentService = departmentService;
         this.accountService = accountService;
@@ -115,6 +114,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         this.dateFormatAware = dateFormatAware;
         this.clock = clock;
         this.specialLeaveSettingsService = specialLeaveSettingsService;
+        this.applicationMapper = applicationMapper;
     }
 
     @InitBinder
@@ -122,11 +122,10 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         binder.registerCustomEditor(Time.class, new TimePropertyEditor());
         binder.registerCustomEditor(BigDecimal.class, new DecimalNumberPropertyEditor(locale));
         binder.registerCustomEditor(Person.class, new PersonPropertyEditor(personService));
-        binder.registerCustomEditor(VacationType.class, new VacationTypePropertyEditor(vacationTypeService));
     }
 
     @GetMapping("/application/new")
-    public String newApplicationForm(@RequestParam(value = "personId", required = false) Integer personId,
+    public String newApplicationForm(@RequestParam(value = "personId", required = false) Long personId,
                                      @RequestParam(value = "from", required = false) String startDateString,
                                      @RequestParam(value = "to", required = false) String endDateString,
                                      Model model, Locale locale) {
@@ -144,7 +143,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
             appForLeaveForm.setStartDate(startDate);
             appForLeaveForm.setEndDate(endDate);
 
-            prepareApplicationForLeaveForm(signedInUser, person, appForLeaveForm, model);
+            prepareApplicationForLeaveForm(signedInUser, person, appForLeaveForm, model, locale);
             addSelectableHolidayReplacementsToModel(model, selectableHolidayReplacements(not(isEqual(person))));
         }
 
@@ -152,8 +151,8 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         return "application/application_form";
     }
 
-    @PostMapping(value = {"/application/new", "/application/{applicationId}"}, params = "add-holiday-replacement")
-    public String addHolidayReplacement(ApplicationForLeaveForm applicationForLeaveForm, Model model) {
+    @PostMapping(value = {"/application/new", "/application/{applicationId}/edit"}, params = "add-holiday-replacement")
+    public String addHolidayReplacement(ApplicationForLeaveForm applicationForLeaveForm, Model model, Locale locale) {
 
         final Person signedInUser = personService.getSignedInUser();
         final Person person = ofNullable(applicationForLeaveForm.getPerson())
@@ -190,7 +189,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
                 addSelectableHolidayReplacementsToModel(model, nextSelectableReplacements);
             }
 
-            prepareApplicationForLeaveForm(signedInUser, person, applicationForLeaveForm, model);
+            prepareApplicationForLeaveForm(signedInUser, person, applicationForLeaveForm, model, locale);
         }
 
         model.addAttribute(NO_HOLIDAYS_ACCOUNT, holidaysAccount.isEmpty());
@@ -221,20 +220,20 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
 
         model.addAttribute("index", applicationForLeave.getHolidayReplacements().size());
 
-        final Integer applicationForLeaveId = applicationForLeave.getId();
+        final Long applicationForLeaveId = applicationForLeave.getId();
         if (applicationForLeaveId == null) {
             model.addAttribute("deleteButtonFormActionValue", "/web/application/new");
         } else {
-            model.addAttribute("deleteButtonFormActionValue", "/web/application/" + applicationForLeaveId);
+            model.addAttribute("deleteButtonFormActionValue", "/web/application/" + applicationForLeaveId + "/edit");
         }
 
         return "application/application-form :: replacement-item";
     }
 
-    @PostMapping(value = {"/application/new", "/application/{applicationId}"}, params = "remove-holiday-replacement")
+    @PostMapping(value = {"/application/new", "/application/{applicationId}/edit"}, params = "remove-holiday-replacement")
     public String removeHolidayReplacement(@ModelAttribute("applicationForLeaveForm") ApplicationForLeaveForm applicationForLeaveForm,
-                                           @RequestParam(name = "remove-holiday-replacement") Integer personIdToRemove,
-                                           Model model) {
+                                           @RequestParam(name = "remove-holiday-replacement") Long personIdToRemove,
+                                           Model model, Locale locale) {
 
         final Person signedInUser = personService.getSignedInUser();
         final Person person = ofNullable(applicationForLeaveForm.getPerson()).orElse(signedInUser);
@@ -250,7 +249,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
                 .filter(holidayReplacementDto -> !holidayReplacementDto.getPerson().getId().equals(personIdToRemove))
                 .collect(toList());
             applicationForLeaveForm.setHolidayReplacements(newList);
-            prepareApplicationForLeaveForm(signedInUser, person, applicationForLeaveForm, model);
+            prepareApplicationForLeaveForm(signedInUser, person, applicationForLeaveForm, model, locale);
 
             final List<SelectableHolidayReplacementDto> selectableHolidayReplacements = selectableHolidayReplacements(
                 personEquals(personIdToRemove)
@@ -267,7 +266,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
 
     @PostMapping("/application")
     public String newApplication(@ModelAttribute("applicationForLeaveForm") ApplicationForLeaveForm appForm, Errors errors,
-                                 Model model, RedirectAttributes redirectAttributes) {
+                                 Model model, Locale locale, RedirectAttributes redirectAttributes) {
         LOG.info("POST new application received: {}", appForm);
 
         final Person applier = personService.getSignedInUser();
@@ -286,7 +285,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
             );
             addSelectableHolidayReplacementsToModel(model, selectableHolidayReplacementDtos);
 
-            prepareApplicationForLeaveForm(applier, appForm.getPerson(), appForm, model);
+            prepareApplicationForLeaveForm(applier, appForm.getPerson(), appForm, model, locale);
 
             if (errors.hasGlobalErrors()) {
                 model.addAttribute("errors", errors);
@@ -296,10 +295,10 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
             return "application/application_form";
         }
 
-        final Application app = mapToApplication(appForm);
+        final Application app = applicationMapper.mapToApplication(appForm);
 
         final Application savedApplicationForLeave;
-        if (app.getVacationType().isRequiresApproval()) {
+        if (app.getVacationType().isRequiresApprovalToApply()) {
             savedApplicationForLeave = applicationInteractionService.apply(app, applier, ofNullable(appForm.getComment()));
         } else {
             savedApplicationForLeave = applicationInteractionService.directAllow(app, applier, ofNullable(appForm.getComment()));
@@ -312,28 +311,23 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
     }
 
     @GetMapping("/application/{applicationId}/edit")
-    public String editApplicationForm(@PathVariable("applicationId") Integer applicationId, Model model) {
+    public String editApplicationForm(@PathVariable("applicationId") Long applicationId, Model model, Locale locale) {
 
         final Optional<Application> maybeApplication = applicationInteractionService.get(applicationId);
         if (maybeApplication.isEmpty()) {
-            return "application/application-notwaiting";
-        }
-
-        final Application application = maybeApplication.get();
-        if (!WAITING.equals(application.getStatus())) {
-            return "application/application-notwaiting";
+            return "application/application-not-editable";
         }
 
         final Person signedInUser = personService.getSignedInUser();
-        final boolean isApplyingForOneSelf = application.getPerson().equals(signedInUser);
-        if (!isApplyingForOneSelf) {
-            throw new AccessDeniedException(format(USER_HAS_NOT_THE_CORRECT_PERMISSIONS, signedInUser.getId(), application.getPerson().getId()));
+        final Application application = maybeApplication.get();
+        if (!isAllowedToEditApplication(application, signedInUser)) {
+            return "application/application-not-editable";
         }
 
-        final ApplicationForLeaveForm applicationForLeaveForm = mapToApplicationForm(application);
+        final ApplicationForLeaveForm applicationForLeaveForm = mapToApplicationForm(application, locale);
         final Optional<Account> holidaysAccount = accountService.getHolidaysAccount(Year.now(clock).getValue(), signedInUser);
         if (holidaysAccount.isPresent()) {
-            prepareApplicationForLeaveForm(signedInUser, signedInUser, applicationForLeaveForm, model);
+            prepareApplicationForLeaveForm(signedInUser, signedInUser, applicationForLeaveForm, model, locale);
 
             final List<SelectableHolidayReplacementDto> selectableHolidayReplacements = selectableHolidayReplacements(
                 not(containsPerson(holidayReplacementPersonsOfApplication(applicationForLeaveForm)))
@@ -348,10 +342,10 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         return "application/application_form";
     }
 
-    @PostMapping("/application/{applicationId}")
-    public String sendEditApplicationForm(@PathVariable("applicationId") Integer applicationId,
+    @PostMapping("/application/{applicationId}/edit")
+    public String sendEditApplicationForm(@PathVariable("applicationId") Long applicationId,
                                           @ModelAttribute("applicationForLeaveForm") ApplicationForLeaveForm appForm, Errors errors,
-                                          Model model, RedirectAttributes redirectAttributes) throws UnknownApplicationForLeaveException {
+                                          Model model, Locale locale, RedirectAttributes redirectAttributes) throws UnknownApplicationForLeaveException {
 
         final Optional<Application> maybeApplication = applicationInteractionService.get(applicationId);
         if (maybeApplication.isEmpty()) {
@@ -359,18 +353,17 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         }
 
         final Application application = maybeApplication.get();
-        if (application.getStatus().compareTo(WAITING) != 0) {
+        final Person signedInUser = personService.getSignedInUser();
+        if (!isAllowedToEditApplication(application, signedInUser)) {
             redirectAttributes.addFlashAttribute("editError", true);
             return "redirect:/web/application/" + applicationId;
         }
-
-        final Person signedInUser = personService.getSignedInUser();
 
         appForm.setId(application.getId());
         applicationForLeaveFormValidator.validate(appForm, errors);
 
         if (errors.hasErrors()) {
-            prepareApplicationForLeaveForm(appForm.getPerson(), appForm.getPerson(), appForm, model);
+            prepareApplicationForLeaveForm(signedInUser, appForm.getPerson(), appForm, model, locale);
             if (errors.hasGlobalErrors()) {
                 model.addAttribute("errors", errors);
             }
@@ -384,12 +377,12 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
             return "application/application_form";
         }
 
-        final Application editedApplication = merge(application, appForm);
+        final Application editedApplication = applicationMapper.merge(application, appForm);
         final Application savedApplicationForLeave;
         try {
             savedApplicationForLeave = applicationInteractionService.edit(application, editedApplication, signedInUser, Optional.ofNullable(appForm.getComment()));
         } catch (EditApplicationForLeaveNotAllowedException e) {
-            return "application/application-notwaiting";
+            return "application/application-not-editable";
         }
 
         LOG.debug("Edited application with success applied {}", savedApplicationForLeave);
@@ -399,28 +392,38 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         return "redirect:/web/application/" + savedApplicationForLeave.getId();
     }
 
-    private Optional<Person> getPersonByRequestParam(Integer personId) {
+    private Optional<Person> getPersonByRequestParam(Long personId) {
         if (personId == null) {
             return Optional.empty();
         }
         return personService.getPersonByID(personId);
     }
 
-    private void prepareApplicationForLeaveForm(Person applier, Person person, ApplicationForLeaveForm appForm, Model model) {
+    private void prepareApplicationForLeaveForm(Person signedInUser, Person person, ApplicationForLeaveForm appForm, Model model, Locale locale) {
+
+        final Settings settings = settingsService.getSettings();
 
         model.addAttribute("person", person);
-        final List<Person> managedPersons = getManagedPersons(applier);
+        final List<Person> managedPersons = getManagedPersons(signedInUser);
         model.addAttribute("persons", managedPersons);
-        model.addAttribute("canAddApplicationForLeaveForAnotherUser", !(managedPersons.size() == 1 && managedPersons.contains(applier)));
+        model.addAttribute("canAddApplicationForLeaveForAnotherUser", !(managedPersons.size() == 1 && managedPersons.contains(signedInUser)));
 
-        final boolean overtimeActive = settingsService.getSettings().getOvertimeSettings().isOvertimeActive();
+        final boolean overtimeActive = settings.getOvertimeSettings().isOvertimeActive();
         model.addAttribute("overtimeActive", overtimeActive);
 
-        List<VacationType> activeVacationTypes = vacationTypeService.getActiveVacationTypes();
-        if (!overtimeActive) {
-            activeVacationTypes = vacationTypeService.getActiveVacationTypesWithoutCategory(OVERTIME);
+        final List<VacationType<?>> activeVacationTypes = overtimeActive
+            ? vacationTypeService.getActiveVacationTypes()
+            : vacationTypeService.getActiveVacationTypesWithoutCategory(OVERTIME);
+
+        final List<ApplicationForLeaveFormVacationTypeDto> activeVacationTypesDtos = activeVacationTypes.stream()
+            .map(vacationType -> toApplicationForLeaveFormVacationTypeDto(vacationType, locale))
+            .toList();
+        model.addAttribute("vacationTypes", activeVacationTypesDtos);
+
+        if (appForm.getVacationType() != null) {
+            final VacationType<?> vacationType = findVacationType(activeVacationTypes, appForm.getVacationType().getId());
+            appForm.setVacationType(toApplicationForLeaveFormVacationTypeDto(vacationType, locale));
         }
-        model.addAttribute("vacationTypes", activeVacationTypes);
 
         final List<SpecialLeaveSettingsItem> specialLeaveSettings = specialLeaveSettingsService.getSpecialLeaveSettings().stream()
             .filter(SpecialLeaveSettingsItem::isActive)
@@ -431,18 +434,29 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         model.addAttribute("applicationForLeaveForm", appForm);
 
         final boolean isHalfDayApplication = ofNullable(appForm.getDayLength()).filter(DayLength::isHalfDay).isPresent();
-        final boolean isHalfDaysActivated = settingsService.getSettings().getApplicationSettings().isAllowHalfDays();
+        final boolean isHalfDaysActivated = settings.getApplicationSettings().isAllowHalfDays();
         model.addAttribute("showHalfDayOption", isHalfDayApplication || isHalfDaysActivated);
 
         final List<VacationTypeDto> vacationTypeColors = vacationTypeViewModelService.getVacationTypeColors();
         model.addAttribute("vacationTypeColors", vacationTypeColors);
     }
 
+    private VacationType<?> findVacationType(Collection<VacationType<?>> vacationTypes, Long id) {
+        return vacationTypes.stream()
+            .filter(type -> type.getId().equals(id))
+            .findFirst()
+            .orElseGet(() -> getVacationType(id));
+    }
+
+    private VacationType<?> getVacationType(Long id) {
+        return vacationTypeService.getById(id).orElseThrow(() -> new IllegalStateException("could not find vacationType with id=" + id));
+    }
+
     private static Predicate<Person> personEquals(Person person) {
         return person::equals;
     }
 
-    private static Predicate<Person> personEquals(Integer personId) {
+    private static Predicate<Person> personEquals(Long personId) {
         return p -> p.getId().equals(personId);
     }
 
@@ -458,7 +472,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         return getAllSelectableReplacementPersons().stream()
             .filter(predicate)
             .map(ApplicationForLeaveFormViewController::toSelectableHolidayReplacementDto)
-            .collect(toUnmodifiableList());
+            .toList();
     }
 
     private static void addSelectableHolidayReplacementsToModel(Model model, List<SelectableHolidayReplacementDto> dtos) {
@@ -487,7 +501,7 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
         }
     }
 
-    private ApplicationForLeaveForm mapToApplicationForm(Application application) {
+    private ApplicationForLeaveForm mapToApplicationForm(Application application, Locale locale) {
 
         final List<Department> departments = departmentService.getAllDepartments();
 
@@ -506,10 +520,18 @@ class ApplicationForLeaveFormViewController implements HasLaunchpad {
             .dayLength(application.getDayLength())
             .hoursAndMinutes(application.getHours())
             .person(application.getPerson())
-            .vacationType(convert(application.getVacationType()))
+            .vacationType(toApplicationForLeaveFormVacationTypeDto(application.getVacationType(), locale))
             .reason(application.getReason())
             .holidayReplacements(holidayReplacementDtos)
             .build();
+    }
+
+    private ApplicationForLeaveFormVacationTypeDto toApplicationForLeaveFormVacationTypeDto(VacationType<?> vacationType, Locale locale) {
+        final ApplicationForLeaveFormVacationTypeDto dto = new ApplicationForLeaveFormVacationTypeDto();
+        dto.setId(vacationType.getId());
+        dto.setLabel(vacationType.getLabel(locale));
+        dto.setCategory(vacationType.getCategory());
+        return dto;
     }
 
     private List<String> departmentNamesForPerson(Person person, List<Department> departments) {

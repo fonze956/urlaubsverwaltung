@@ -23,7 +23,9 @@ public interface ApplicationService {
      * @param id to get the {@link Application} by.
      * @return optional {@link Application} for the given id
      */
-    Optional<Application> getApplicationById(Integer id);
+    Optional<Application> getApplicationById(Long id);
+
+    List<Application> findApplicationsByIds(Iterable<Long> applicationIds);
 
     /**
      * Saves a new {@link Application}.
@@ -52,19 +54,6 @@ public interface ApplicationService {
      * @return all {@link Application}s of the given persons with vacation time between startDate and endDate
      */
     List<Application> getApplicationsForACertainPeriodAndStatus(LocalDate startDate, LocalDate endDate, List<Person> persons, List<ApplicationStatus> statuses);
-
-    /**
-     * Returns all {@link Application}s with vacation time starting in between startDate x and endDate y for the given
-     * status and filters by the person, status and vacation category
-     *
-     * @param startDate        {@link LocalDate}
-     * @param endDate          {@link LocalDate}
-     * @param person           {@link Person}
-     * @param statuses         {@link ApplicationStatus} that should be filtered for
-     * @param vacationCategory {@link VacationCategory} that should be filtered for
-     * @return filters {@link Application}s by status of the given person with vacation category between startDate x and endDate y
-     */
-    List<Application> getApplicationsStartingInACertainPeriodAndPersonAndVacationCategory(LocalDate startDate, LocalDate endDate, Person person, List<ApplicationStatus> statuses, VacationCategory vacationCategory);
 
     /**
      * Returns all {@link Application}s where their start or end date is overlapping with the given period between startDate and endDate
@@ -101,19 +90,6 @@ public interface ApplicationService {
      * @return all {@link Application}s where the given params match and
      */
     List<Application> getApplicationsWhereHolidayReplacementShouldBeNotified(LocalDate from, LocalDate to, List<ApplicationStatus> statuses);
-
-    /**
-     * Gets all {@link Application}s with vacation time between startDate x and endDate y for the given person and
-     * state.
-     *
-     * @param startDate {@link LocalDate}
-     * @param endDate   {@link LocalDate}
-     * @param person    {@link Person}
-     * @param status    {@link ApplicationStatus}
-     * @return all {@link Application}s of the given person with vacation time between startDate x and endDate y and
-     * with a certain state
-     */
-    List<Application> getApplicationsForACertainPeriodAndPersonAndState(LocalDate startDate, LocalDate endDate, Person person, ApplicationStatus status);
 
     /**
      * Get all {@link Application} with specific states
@@ -153,6 +129,15 @@ public interface ApplicationService {
      * @return list of all matching {@link Application}s
      */
     List<Application> getForStatesAndPerson(List<ApplicationStatus> statuses, List<Person> persons, LocalDate start, LocalDate end);
+    /**
+     * Get all {@link Application}s with specific states for the given date range
+     *
+     * @param statuses {@link ApplicationStatus} to filter
+     * @param start    start date (inclusive)
+     * @param end      end date (inclusive)
+     * @return list of all matching {@link Application}s
+     */
+    List<Application> getForStates(List<ApplicationStatus> statuses, LocalDate start, LocalDate end);
 
     /**
      * Get the total hours of overtime reduction for a certain person.
@@ -162,11 +147,9 @@ public interface ApplicationService {
      */
     Duration getTotalOvertimeReductionOfPerson(Person person);
 
-    Duration getTotalOvertimeReductionOfPerson(Person person, LocalDate start, LocalDate end);
-
     Map<Person, Duration> getTotalOvertimeReductionOfPersonUntil(Collection<Person> persons, LocalDate until);
 
-    Duration getTotalOvertimeReductionOfPersonBefore(Person person, LocalDate before);
+    Duration getTotalOvertimeReductionOfPersonUntil(Person person, LocalDate before);
 
     /**
      * Get a list of all active replacements of the given person and that are active at the given date

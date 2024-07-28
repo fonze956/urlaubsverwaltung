@@ -14,7 +14,6 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.authentication.event.AuthenticationSuccessEvent;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -35,7 +34,6 @@ import static java.util.Locale.ENGLISH;
 import static java.util.Locale.GERMAN;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.synyx.urlaubsverwaltung.user.Theme.LIGHT;
 
@@ -65,14 +63,14 @@ class UserSettingsServiceTest {
     void ensureUserSettingsForPerson() {
 
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
         final UserSettingsEntity entity = new UserSettingsEntity();
-        entity.setPersonId(42);
+        entity.setPersonId(42L);
         entity.setTheme(Theme.DARK);
         entity.setLocale(GERMAN);
 
-        when(userSettingsRepository.findById(42)).thenReturn(Optional.of(entity));
+        when(userSettingsRepository.findById(42L)).thenReturn(Optional.of(entity));
 
         final UserSettings actual = sut.getUserSettingsForPerson(person);
 
@@ -83,9 +81,9 @@ class UserSettingsServiceTest {
     @Test
     void ensureUserSettingsForPersonReturnsDefault() {
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
-        when(userSettingsRepository.findById(42)).thenReturn(Optional.empty());
+        when(userSettingsRepository.findById(42L)).thenReturn(Optional.empty());
 
         final UserSettings actual = sut.getUserSettingsForPerson(person);
 
@@ -97,18 +95,18 @@ class UserSettingsServiceTest {
     void ensureUpdateUserPreference() {
 
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
         final UserSettingsEntity entity = new UserSettingsEntity();
-        entity.setPersonId(42);
+        entity.setPersonId(42L);
         entity.setTheme(Theme.DARK);
         entity.setLocale(null);
         entity.setLocaleBrowserSpecific(ENGLISH);
 
-        when(userSettingsRepository.findById(42)).thenReturn(Optional.of(entity));
+        when(userSettingsRepository.findById(42L)).thenReturn(Optional.of(entity));
 
         final UserSettingsEntity entityToSave = new UserSettingsEntity();
-        entityToSave.setPersonId(42);
+        entityToSave.setPersonId(42L);
         entityToSave.setTheme(LIGHT);
         entityToSave.setLocale(GERMAN);
 
@@ -137,18 +135,18 @@ class UserSettingsServiceTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
         final UserSettingsEntity entity = new UserSettingsEntity();
-        entity.setPersonId(42);
+        entity.setPersonId(42L);
         entity.setTheme(Theme.DARK);
         entity.setLocale(ENGLISH);
         entity.setLocaleBrowserSpecific(null);
 
-        when(userSettingsRepository.findById(42)).thenReturn(Optional.of(entity));
+        when(userSettingsRepository.findById(42L)).thenReturn(Optional.of(entity));
 
         final UserSettingsEntity entityToSave = new UserSettingsEntity();
-        entityToSave.setPersonId(42);
+        entityToSave.setPersonId(42L);
         entityToSave.setTheme(LIGHT);
         entityToSave.setLocale(null);
         entityToSave.setLocaleBrowserSpecific(GERMAN);
@@ -174,12 +172,12 @@ class UserSettingsServiceTest {
     void ensureUpdateUserPreferenceWhenNothingHasBeenPersistedYet() {
 
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
-        when(userSettingsRepository.findById(42)).thenReturn(Optional.empty());
+        when(userSettingsRepository.findById(42L)).thenReturn(Optional.empty());
 
         final UserSettingsEntity entityToSave = new UserSettingsEntity();
-        entityToSave.setPersonId(42);
+        entityToSave.setPersonId(42L);
         entityToSave.setTheme(LIGHT);
         entityToSave.setLocale(GERMAN);
 
@@ -202,7 +200,7 @@ class UserSettingsServiceTest {
     void ensureFindLocaleForUsernameReturnsEmptyOptionalWhenUsernameIsUnknown() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
         when(userSettingsRepository.findByPerson(person)).thenReturn(Optional.empty());
 
@@ -214,7 +212,7 @@ class UserSettingsServiceTest {
     void ensureFindLocaleForUsernameReturnsEmptyOptionalWhenThereIsNoLocale() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
         final UserSettingsEntity entity = new UserSettingsEntity();
         entity.setLocale(null);
@@ -229,7 +227,7 @@ class UserSettingsServiceTest {
     void ensureFindLocaleForUsernameReturnsLocale() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
         final UserSettingsEntity entity = new UserSettingsEntity();
         entity.setLocale(GERMAN);
@@ -284,8 +282,6 @@ class UserSettingsServiceTest {
 
     static Stream<Arguments> authentications() {
         return Stream.of(
-            Arguments.of(new TestingAuthenticationToken(new User("username", "password", List.of()), null), GERMAN),
-            Arguments.of(new TestingAuthenticationToken(new User("username", "password", List.of()), null), ENGLISH),
             Arguments.of(new TestingAuthenticationToken(new DefaultOidcUser(List.of(), new OidcIdToken("tokenValue", Instant.parse("2020-12-01T00:00:00.00Z"), Instant.parse("2020-12-02T00:00:00.00Z"), Map.of("sub", "username"))), null), GERMAN),
             Arguments.of(new TestingAuthenticationToken(new DefaultOidcUser(List.of(), new OidcIdToken("tokenValue", Instant.parse("2020-12-01T00:00:00.00Z"), Instant.parse("2020-12-02T00:00:00.00Z"), Map.of("sub", "username"))), null), ENGLISH)
         );
@@ -296,7 +292,7 @@ class UserSettingsServiceTest {
     void ensureAuthenticationSuccessSetsLocaleForAuthentication(Authentication authentication, Locale locale) {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setUsername("username");
         when(personService.getPersonByUsername("username")).thenReturn(Optional.of(person));
 
@@ -313,24 +309,5 @@ class UserSettingsServiceTest {
         sut.handleAuthenticationSuccess(authenticationSuccessEvent);
 
         verify(localeResolver).setLocale(request, null, locale);
-    }
-
-    @Test
-    void ensureAuthenticationSuccessDoesNotSetLocaleWhenNotAvailable() {
-
-        final Person person = new Person();
-        person.setId(1);
-        person.setUsername("username");
-        when(personService.getPersonByUsername("username")).thenReturn(Optional.of(person));
-
-        final UserSettingsEntity userSettingsEntity = new UserSettingsEntity();
-        userSettingsEntity.setLocale(null);
-
-        when(userSettingsRepository.findByPerson(person)).thenReturn(Optional.of(userSettingsEntity));
-
-        final AuthenticationSuccessEvent authenticationSuccessEvent = new AuthenticationSuccessEvent(new TestingAuthenticationToken(new User("username", "password", List.of()), null));
-        sut.handleAuthenticationSuccess(authenticationSuccessEvent);
-
-        verifyNoInteractions(localeResolver);
     }
 }

@@ -1,0 +1,58 @@
+uv:
+  calendar:
+    organizer: organizer@example.org
+  mail:
+    application-url: https://localhost:8080
+    from: sender@example.org
+    fromDisplayName: Urlaubsverwaltung
+    replyTo: sender@example.org
+    replyToDisplayName: Urlaubsverwaltung
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: https://auth.example.org/realms/2657fdc6/protocol/openid-connect/certs
+      client:
+        registration:
+          default:
+            client-id: urlaubsverwaltung
+            provider: default
+            scope: openid,profile,email,roles
+            authorization-grant-type: authorization_code
+            redirect-uri: http://{baseHost}{basePort}/login/oauth2/code/{registrationId}
+        provider:
+          default:
+            token-uri: https://auth.example.org/realms/urlaubsverwaltung/protocol/openid-connect/token
+            authorization-uri: https://auth.example.org/realms/urlaubsverwaltung/protocol/openid-connect/auth
+            jwk-set-uri: https://auth.example.org/realms/urlaubsverwaltung/protocol/openid-connect/certs
+  mail:
+    host: localhost
+  main:
+    banner-mode: off
+  data:
+    web:
+      pageable:
+        default-page-size: 1
+  liquibase:
+    change-log: classpath:/dbchangelogs/changelogmaster.xml
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        id:
+          new_generator_mappings: false
+  session:
+    jdbc:
+      initialize-schema: always
+  messages:
+    fallback-to-system-locale: false
+  threads:
+    virtual:
+      enabled: true
+
+info:
+  app:
+    name: "@project.name@"
+    version: "@project.version@"

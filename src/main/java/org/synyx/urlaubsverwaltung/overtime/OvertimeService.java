@@ -42,7 +42,7 @@ public interface OvertimeService {
      * @param id to get the overtime record by
      * @return overtime record with the given ID or an empty optional if no entry found for the given ID
      */
-    Optional<Overtime> getOvertimeById(Integer id);
+    Optional<Overtime> getOvertimeById(Long id);
 
     /**
      * Fetch the comments for a certain overtime record.
@@ -81,27 +81,25 @@ public interface OvertimeService {
     Duration getLeftOvertimeForPerson(Person person);
 
     /**
+     * Get the left overtime hours of the given person: the difference between the total overtime and the overtime
+     * reduction excluding the given applications
+     *
+     * @param person to get the left overtime for
+     * @return the left overtime, never {@code null}
+     */
+    Duration getLeftOvertimeForPerson(Person person, List<Long> excludingApplicationIDs);
+
+    /**
      * Get the left overtime hours of the given persons: the difference between the total overtime and the overtime
      * reduction.
      *
-     * @param persons to get the left overtime for
+     * @param persons      to get the left overtime for
      * @param applications to get the left overtime for
-     * @param start of period
-     * @param end of period
+     * @param start        of period
+     * @param end          of period
      * @return the left overtime
      */
     Map<Person, LeftOvertime> getLeftOvertimeTotalAndDateRangeForPersons(List<Person> persons, List<Application> applications, LocalDate start, LocalDate end);
-
-    /**
-     * Get the left overtime hours of the given person: the difference between the total overtime at start and the
-     * overtime reduction of period between start and end
-     *
-     * @param person to get the left overtime for
-     * @param start  of period
-     * @param end    of period
-     * @return the left overtime, never {@code null}
-     */
-    Duration getLeftOvertimeForPerson(Person person, LocalDate start, LocalDate end);
 
     /**
      * Is signedInUser allowed to write (create or update) overtime records of given personOfOvertime.

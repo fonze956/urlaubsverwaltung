@@ -19,7 +19,7 @@ public class AbsenceTypeSettingsDto {
     private List<AbsenceTypeSettingsItemDto> items;
 
     // hard coded instead of enum.values() to have an explicit list order
-    private List<VacationTypeColor> colors = List.of(GRAY, ORANGE, YELLOW, EMERALD, CYAN, BLUE, VIOLET, PINK);
+    private final List<VacationTypeColor> colors = List.of(GRAY, ORANGE, YELLOW, EMERALD, CYAN, BLUE, VIOLET, PINK);
 
     public List<AbsenceTypeSettingsItemDto> getItems() {
         return items;
@@ -44,5 +44,12 @@ public class AbsenceTypeSettingsDto {
     @Override
     public int hashCode() {
         return Objects.hash(items);
+    }
+
+    @Override
+    public String toString() {
+        return "AbsenceTypeSettingsDto{" +
+            "items=" + items +
+            '}';
     }
 }

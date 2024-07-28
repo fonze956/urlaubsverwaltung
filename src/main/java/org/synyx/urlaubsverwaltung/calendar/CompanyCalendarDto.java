@@ -1,9 +1,8 @@
 package org.synyx.urlaubsverwaltung.calendar;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
-
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
 
 import static org.synyx.urlaubsverwaltung.calendar.CalendarPeriodViewType.HALF_YEAR;
 
@@ -11,17 +10,17 @@ import static org.synyx.urlaubsverwaltung.calendar.CalendarPeriodViewType.HALF_Y
 public class CompanyCalendarDto {
 
     @NotNull
-    private int personId;
+    private long personId;
     @Size(min = 1)
     private String calendarUrl;
     @NotNull
     private CalendarPeriodViewType calendarPeriod = HALF_YEAR;
 
-    public int getPersonId() {
+    public long getPersonId() {
         return personId;
     }
 
-    public void setPersonId(int personId) {
+    public void setPersonId(long personId) {
         this.personId = personId;
     }
 

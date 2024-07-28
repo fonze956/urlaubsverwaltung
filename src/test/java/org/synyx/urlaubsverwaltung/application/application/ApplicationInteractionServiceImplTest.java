@@ -8,24 +8,20 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.support.StaticMessageSource;
 import org.synyx.urlaubsverwaltung.TestDataCreator;
 import org.synyx.urlaubsverwaltung.absence.Absence;
-import org.synyx.urlaubsverwaltung.absence.TimeSettings;
 import org.synyx.urlaubsverwaltung.account.AccountInteractionService;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationComment;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentService;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
-import org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMapping;
-import org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingService;
-import org.synyx.urlaubsverwaltung.calendarintegration.CalendarSyncService;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
 import org.synyx.urlaubsverwaltung.person.Role;
-import org.synyx.urlaubsverwaltung.settings.Settings;
-import org.synyx.urlaubsverwaltung.settings.SettingsService;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -43,9 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -53,9 +47,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-import static org.synyx.urlaubsverwaltung.TestDataCreator.anyAbsenceMapping;
 import static org.synyx.urlaubsverwaltung.TestDataCreator.createApplication;
 import static org.synyx.urlaubsverwaltung.TestDataCreator.createPerson;
+import static org.synyx.urlaubsverwaltung.TestDataCreator.createVacationType;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
@@ -67,9 +61,6 @@ import static org.synyx.urlaubsverwaltung.application.comment.ApplicationComment
 import static org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction.EDITED;
 import static org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction.REFERRED;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.HOLIDAY;
-import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.YELLOW;
-import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeServiceImpl.convert;
-import static org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingType.VACATION;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.SECOND_STAGE_AUTHORITY;
@@ -89,12 +80,6 @@ class ApplicationInteractionServiceImplTest {
     @Mock
     private ApplicationMailService applicationMailService;
     @Mock
-    private CalendarSyncService calendarSyncService;
-    @Mock
-    private AbsenceMappingService absenceMappingService;
-    @Mock
-    private SettingsService settingsService;
-    @Mock
     private DepartmentService departmentService;
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
@@ -103,25 +88,17 @@ class ApplicationInteractionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-
-        final Settings settings = new Settings();
-        settings.setTimeSettings(new TimeSettings());
-        when(settingsService.getSettings()).thenReturn(settings);
-
         sut = new ApplicationInteractionServiceImpl(applicationService, commentService, accountInteractionService,
-            applicationMailService, calendarSyncService, absenceMappingService, settingsService, departmentService, clock, applicationEventPublisher);
+            applicationMailService, departmentService, clock, applicationEventPublisher);
     }
 
     // APPLY FOR LEAVE -------------------------------------------------------------------------------------------------
     @Test
     void ensureApplyForLeaveChangesStateAndOtherAttributesAndSavesTheApplicationForLeave() {
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(of("42"));
-
-        Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        Person applier = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        Optional<String> comment = of("Foo");
+        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
+        final Person applier = new Person("muster", "Muster", "Marlene", "muster@example.org");
+        final Optional<String> comment = of("Foo");
 
         Application applicationForLeave = getDummyApplication(person);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
@@ -139,42 +116,22 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationAppliedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationAppliedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationAppliedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
-    }
-
-    @Test
-    void ensureApplyingForLeaveAddsCalendarEvent() {
-
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(of("42"));
-
-        Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        Person applier = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        Optional<String> comment = of("Foo");
-
-        Application applicationForLeave = getDummyApplication(person);
-        when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
-
-        sut.apply(applicationForLeave, applier, comment);
-
-        verify(calendarSyncService).addAbsence(any(Absence.class));
-        verify(absenceMappingService).create(isNull(), eq(VACATION), anyString());
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
     void ensureSendsConfirmationEmailToPersonAndNotificationEmailToBossesWhenApplyingForOneself() {
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(of("42"));
-
-        Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
+        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
         final Application applicationForLeave = getDummyApplication(person);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(eq(applicationForLeave), eq(ApplicationCommentAction.APPLIED), any(), eq(person))).thenReturn(applicationComment);
 
         sut.apply(applicationForLeave, person, of("Foo"));
@@ -187,9 +144,6 @@ class ApplicationInteractionServiceImplTest {
     @Test
     void ensureSendsNotificationToPersonIfApplicationForLeaveNotAppliedByOneself() {
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(of("42"));
-
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
         final Person applier = new Person("muster", "Muster", "Marlene", "muster@example.org");
         applier.setPermissions(List.of(OFFICE));
@@ -197,7 +151,9 @@ class ApplicationInteractionServiceImplTest {
         Application applicationForLeave = getDummyApplication(person);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(eq(applicationForLeave), eq(ApplicationCommentAction.APPLIED), any(), eq(applier))).thenReturn(applicationComment);
 
         sut.apply(applicationForLeave, applier, of("Foo"));
@@ -209,9 +165,6 @@ class ApplicationInteractionServiceImplTest {
 
     @Test
     void ensureApplyingForLeaveUpdatesTheRemainingVacationDays() {
-
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(of("42"));
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
         final Person applier = new Person("muster", "Muster", "Marlene", "muster@example.org");
@@ -232,21 +185,22 @@ class ApplicationInteractionServiceImplTest {
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
         final Optional<String> comment = of("Foo");
 
-        final VacationType holidayType = new VacationType(1000, true, HOLIDAY, "application.data.vacationType.holiday", false, YELLOW, false);
+        final VacationType<?> holidayType = ProvidedVacationType.builder(new StaticMessageSource()).build();
 
         final Application applicationForLeave = getDummyApplication(person);
-        applicationForLeave.setVacationType(convert(holidayType));
+        applicationForLeave.setVacationType(holidayType);
         applicationForLeave.setStatus(ALLOWED);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, person)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, person))
+            .thenReturn(applicationComment);
 
         sut.directAllow(applicationForLeave, person, comment);
 
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, person);
-
-        verify(calendarSyncService, never()).addAbsence(any(Absence.class));
-        verifyNoInteractions(absenceMappingService);
 
         verify(applicationMailService).sendConfirmationAllowedDirectly(eq(applicationForLeave), any(ApplicationComment.class));
         verify(applicationMailService, never()).sendConfirmationAllowedDirectlyByManagement(any(Application.class), any(ApplicationComment.class));
@@ -256,9 +210,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationAllowedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationAllowedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationAllowedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -267,17 +221,18 @@ class ApplicationInteractionServiceImplTest {
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
         final Optional<String> comment = of("Foo");
 
-        final VacationType holidayType = new VacationType(1000, true, HOLIDAY, "application.data.vacationType.holiday", false, YELLOW, false);
+        final VacationType<?> holidayType = ProvidedVacationType.builder(new StaticMessageSource()).build();
 
         final Application applicationForLeave = getDummyApplication(person);
-        applicationForLeave.setVacationType(convert(holidayType));
+        applicationForLeave.setVacationType(holidayType);
         applicationForLeave.setStatus(ALLOWED);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, person)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, person, "Foo");
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(Optional.of("eventId"));
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, person))
+            .thenReturn(applicationComment);
 
         sut.directAllow(applicationForLeave, person, comment);
 
@@ -289,7 +244,6 @@ class ApplicationInteractionServiceImplTest {
         verify(applicationMailService).notifyHolidayReplacementAboutDirectlyAllowedApplication(any(HolidayReplacementEntity.class), any(Application.class));
     }
 
-
     @Test
     void ensureApplicationForLeaveCanBeAllowedDirectlyByOffice() {
 
@@ -298,21 +252,22 @@ class ApplicationInteractionServiceImplTest {
         office.setPermissions(List.of(OFFICE));
         final Optional<String> comment = of("Foo");
 
-        final VacationType holidayType = new VacationType(1000, true, HOLIDAY, "application.data.vacationType.holiday", false, YELLOW, false);
+        final VacationType<?> holidayType = ProvidedVacationType.builder(new StaticMessageSource()).build();
 
         final Application applicationForLeave = getDummyApplication(person);
-        applicationForLeave.setVacationType(convert(holidayType));
+        applicationForLeave.setVacationType(holidayType);
         applicationForLeave.setStatus(ALLOWED);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, office)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, office))
+            .thenReturn(applicationComment);
 
         sut.directAllow(applicationForLeave, office, comment);
 
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED_DIRECTLY, comment, office);
-
-        verify(calendarSyncService, never()).addAbsence(any(Absence.class));
-        verifyNoInteractions(absenceMappingService);
 
         verify(applicationMailService, never()).sendConfirmationAllowedDirectly(eq(applicationForLeave), any(ApplicationComment.class));
         verify(applicationMailService).sendConfirmationAllowedDirectlyByManagement(any(Application.class), any(ApplicationComment.class));
@@ -333,21 +288,24 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, boss, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, boss);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
 
         ArgumentCaptor<ApplicationAllowedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationAllowedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationAllowedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -362,14 +320,16 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setTwoStageApproval(false);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss);
-        when(applicationComment).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, boss, "Foo");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, boss, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, boss);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
     }
 
@@ -385,13 +345,16 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setTwoStageApproval(true);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, boss, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, boss);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, boss);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
     }
 
@@ -412,8 +375,6 @@ class ApplicationInteractionServiceImplTest {
         verifyNoInteractions(applicationService);
         verifyNoInteractions(commentService);
         verifyNoInteractions(applicationMailService);
-        verifyNoInteractions(calendarSyncService);
-        verifyNoInteractions(absenceMappingService);
     }
 
     // ALLOWING - DEPARTMENT HEAD
@@ -445,13 +406,16 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, departmentHead)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, departmentHead))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, departmentHead, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, departmentHead);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, departmentHead);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
     }
 
@@ -469,21 +433,24 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setTwoStageApproval(true);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.TEMPORARY_ALLOWED, comment, departmentHead)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.TEMPORARY_ALLOWED, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.TEMPORARY_ALLOWED, comment, departmentHead))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, departmentHead, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, TEMPORARY_ALLOWED, person, departmentHead);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.TEMPORARY_ALLOWED, comment, departmentHead);
-        assertNoCalendarSyncOccurs();
         assertTemporaryAllowedNotificationIsSent(applicationForLeave);
 
         ArgumentCaptor<ApplicationAllowedTemporarilyEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationAllowedTemporarilyEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationAllowedTemporarilyEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -506,8 +473,6 @@ class ApplicationInteractionServiceImplTest {
         verifyNoInteractions(applicationService);
         verifyNoInteractions(commentService);
         verifyNoInteractions(applicationMailService);
-        verifyNoInteractions(calendarSyncService);
-        verifyNoInteractions(absenceMappingService);
     }
 
     @Test
@@ -524,13 +489,15 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setTwoStageApproval(false);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(any(), any(), any(), any())).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
+        when(commentService.create(any(), any(), any(), any())).thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, departmentHead, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, departmentHead);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, departmentHead);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
     }
 
@@ -548,21 +515,24 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, secondStage, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, secondStage);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
 
         ArgumentCaptor<ApplicationAllowedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationAllowedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationAllowedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -579,13 +549,16 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setTwoStageApproval(true);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage)).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, secondStage, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, secondStage);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage);
-        assertNoCalendarSyncIsExecuted();
         assertAllowedNotificationIsSent(applicationForLeave);
     }
 
@@ -603,15 +576,17 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setTwoStageApproval(true);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage);
-        when(applicationComment).thenReturn(new ApplicationComment(person, clock));
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, secondStage, "Foo");
+
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, secondStage, comment);
 
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, person, secondStage);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStage);
         assertAllowedNotificationIsSent(applicationForLeave);
-        verifyNoInteractions(calendarSyncService);
     }
 
     @Test
@@ -630,21 +605,24 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, departmentHead, "");
+
         final Optional<String> comment = of("Foo");
-        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStageAuthority)).thenReturn(new ApplicationComment(departmentHead, clock));
+        when(commentService.create(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStageAuthority))
+            .thenReturn(applicationComment);
 
         sut.allow(applicationForLeave, secondStageAuthority, comment);
         assertApplicationForLeaveHasChangedStatus(applicationForLeave, ALLOWED, departmentHead, secondStageAuthority);
         assertApplicationForLeaveAndCommentAreSaved(applicationForLeave, ApplicationCommentAction.ALLOWED, comment, secondStageAuthority);
         assertAllowedNotificationIsSent(applicationForLeave);
-        verifyNoInteractions(calendarSyncService);
 
         ArgumentCaptor<ApplicationAllowedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationAllowedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationAllowedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -810,31 +788,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationRejectedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationRejectedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationRejectedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
-    }
-
-    @Test
-    void ensureRejectingApplicationForLeaveDeletesCalendarEvent() {
-
-        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Person boss = new Person("muster", "Muster", "Marlene", "muster@example.org");
-
-        final Optional<String> comment = of("Foo");
-
-        final Application applicationForLeave = getDummyApplication(person);
-        applicationForLeave.setStatus(WAITING);
-        when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
-
-        final AbsenceMapping absenceMapping = anyAbsenceMapping();
-        final Optional<AbsenceMapping> absenceByIdAndType = absenceMappingService.getAbsenceByIdAndType(isNull(), eq(VACATION));
-        when(absenceByIdAndType).thenReturn(of(absenceMapping));
-
-        sut.reject(applicationForLeave, boss, comment);
-
-        verify(calendarSyncService).deleteAbsence(absenceMapping.getEventId());
-        verify(absenceMappingService).delete(absenceMapping);
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -847,7 +803,8 @@ class ApplicationInteractionServiceImplTest {
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
         final Optional<String> optionalComment = of("Foo");
-        final ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.REJECTED, person, "");
 
         when(commentService.create(applicationForLeave, ApplicationCommentAction.REJECTED, optionalComment, boss)).thenReturn(applicationComment);
 
@@ -867,7 +824,9 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(applicationForLeave, ApplicationCommentAction.REVOKED, comment, person)).thenReturn(applicationComment);
 
         sut.cancel(applicationForLeave, person, comment);
@@ -882,30 +841,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationRevokedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationRevokedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationRevokedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
-    }
-
-    @Test
-    void ensureCancellingApplicationForLeaveDeletesCalendarEvent() {
-
-        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Person canceller = new Person("muster", "Muster", "Marlene", "muster@example.org");
-
-        final Optional<String> comment = of("Foo");
-
-        final Application applicationForLeave = getDummyApplication(person);
-        applicationForLeave.setStatus(WAITING);
-        when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
-
-        final AbsenceMapping absenceMapping = anyAbsenceMapping();
-        when(absenceMappingService.getAbsenceByIdAndType(null, VACATION)).thenReturn(of(absenceMapping));
-
-        sut.cancel(applicationForLeave, canceller, comment);
-
-        verify(calendarSyncService).deleteAbsence(anyString());
-        verify(absenceMappingService).delete(any(AbsenceMapping.class));
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -918,8 +856,11 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(ALLOWED);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(any(Application.class), any(ApplicationCommentAction.class), any(), any(Person.class)))
-            .thenReturn(new ApplicationComment(person, clock));
+            .thenReturn(applicationComment);
 
         sut.cancel(applicationForLeave, person, comment);
         assertThat(applicationForLeave.getStatus()).isEqualTo(ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED);
@@ -931,9 +872,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationCancellationRequestedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationCancellationRequestedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationCancellationRequestedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -948,7 +889,9 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(ALLOWED);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(applicationForLeave, CANCELLED, comment, person)).thenReturn(applicationComment);
 
         sut.cancel(applicationForLeave, person, comment);
@@ -963,9 +906,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationCancelledEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationCancelledEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationCancelledEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -981,8 +924,11 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(ALLOWED);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(any(Application.class), any(ApplicationCommentAction.class), any(), any(Person.class)))
-            .thenReturn(new ApplicationComment(person, clock));
+            .thenReturn(applicationComment);
 
         sut.cancel(applicationForLeave, canceller, comment);
 
@@ -1010,8 +956,11 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(any(Application.class), any(ApplicationCommentAction.class), any(), any(Person.class)))
-            .thenReturn(new ApplicationComment(person, clock));
+            .thenReturn(applicationComment);
 
         sut.cancel(applicationForLeave, canceller, comment);
         assertThat(applicationForLeave.getStatus()).isEqualTo(ApplicationStatus.REVOKED);
@@ -1037,7 +986,9 @@ class ApplicationInteractionServiceImplTest {
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.ALLOWED, person, "");
+
         when(commentService.create(any(Application.class), any(ApplicationCommentAction.class), any(), any(Person.class)))
             .thenReturn(applicationComment);
 
@@ -1081,14 +1032,16 @@ class ApplicationInteractionServiceImplTest {
     void ensureDirectCancelByApplicantChangesStateAndOtherAttributesAndSendsEmail() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         final Optional<String> comment = of("Foo");
 
         final Application applicationForLeave = getDummyApplication(person);
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = new ApplicationComment(person, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.CANCELLED_DIRECTLY, person, "");
+
         when(commentService.create(applicationForLeave, ApplicationCommentAction.CANCELLED_DIRECTLY, comment, person)).thenReturn(applicationComment);
 
         final HolidayReplacementEntity holidayReplacement = new HolidayReplacementEntity();
@@ -1110,27 +1063,29 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationCancelledEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationCancelledEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationCancelledEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
     void ensureDirectCancelByOfficeChangesStateAndOtherAttributesAndSendsEmail() {
 
         final Person office = new Person("office", "office", "orlanda", "office@example.org");
-        office.setId(1);
+        office.setId(1L);
         office.setPermissions(List.of(USER, OFFICE));
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(2);
+        person.setId(2L);
         final Optional<String> comment = of("Foo");
 
         final Application applicationForLeave = getDummyApplication(person);
         applicationForLeave.setStatus(WAITING);
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
-        final ApplicationComment applicationComment = new ApplicationComment(office, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, ApplicationCommentAction.CANCELLED_DIRECTLY, person, "");
+
         when(commentService.create(applicationForLeave, ApplicationCommentAction.CANCELLED_DIRECTLY, comment, office)).thenReturn(applicationComment);
 
         final HolidayReplacementEntity holidayReplacement = new HolidayReplacementEntity();
@@ -1166,7 +1121,9 @@ class ApplicationInteractionServiceImplTest {
         when(applicationService.save(applicationForLeave)).thenReturn(applicationForLeave);
 
         final Optional<String> comment = of("Anfrage kann nicht storniert werden!");
-        final ApplicationComment applicationComment = new ApplicationComment(canceller, clock);
+        final ApplicationComment applicationComment = new ApplicationComment(
+            1L, Instant.now(clock), applicationForLeave, CANCEL_REQUESTED_DECLINED, person, "");
+
         when(commentService.create(applicationForLeave, CANCEL_REQUESTED_DECLINED, comment, canceller)).thenReturn(applicationComment);
 
         final Application application = sut.declineCancellationRequest(applicationForLeave, canceller, comment);
@@ -1177,9 +1134,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationDeclinedCancellationRequestEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationDeclinedCancellationRequestEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationDeclinedCancellationRequestEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
@@ -1235,9 +1192,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationCreatedFromSickNoteEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationCreatedFromSickNoteEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationCreatedFromSickNoteEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(applicationForLeave);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     // REMIND ----------------------------------------------------------------------------------------------------------
@@ -1274,7 +1231,7 @@ class ApplicationInteractionServiceImplTest {
         ImpatientAboutApplicationForLeaveProcessException {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Application applicationForLeave = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application applicationForLeave = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         applicationForLeave.setApplicationDate(LocalDate.now(UTC).minusDays(3));
         applicationForLeave.setRemindDate(LocalDate.now(UTC).minusDays(1));
 
@@ -1316,10 +1273,10 @@ class ApplicationInteractionServiceImplTest {
     @Test
     void getApplicationForLeave() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Application application = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application application = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         application.setId(applicationId);
 
         when(applicationService.getApplicationById(applicationId)).thenReturn(Optional.of(application));
@@ -1330,12 +1287,12 @@ class ApplicationInteractionServiceImplTest {
 
     // EDIT -----------------------------------------------------------------------------------------------------------
     @Test
-    void editApplicationForLeave() {
+    void ensureToEditApplicationForLeaveForMyself() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Application application = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application application = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         application.setStatus(WAITING);
         application.setId(applicationId);
         when(applicationService.save(application)).thenReturn(application);
@@ -1352,31 +1309,61 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationUpdatedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationUpdatedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationUpdatedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(editedApplication);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(editedApplication);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
+    }
+
+    @Test
+    void ensureToEditApplicationForLeaveForAnotherUserWithOfficePermission() {
+
+        final Long applicationId = 1L;
+
+        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
+        final Application application = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
+        application.setStatus(ALLOWED);
+        application.setId(applicationId);
+        when(applicationService.save(application)).thenReturn(application);
+
+        final Optional<String> comment = of("Comment");
+
+        final Person office = new Person("muster", "Muster", "Marlene", "muster@example.org");
+        office.setPermissions(List.of(USER, OFFICE));
+        final Application editedApplication = sut.edit(application, application, office, comment);
+        assertThat(editedApplication.getStatus()).isEqualTo(ALLOWED);
+
+        verify(commentService).create(editedApplication, EDITED, comment, office);
+        verify(applicationMailService).sendEditedNotification(editedApplication, office);
+        verifyNoMoreInteractions(applicationMailService);
+
+        ArgumentCaptor<ApplicationUpdatedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
+        final ApplicationUpdatedEvent event = argumentCaptor.getValue();
+        assertThat(event.application()).isEqualTo(editedApplication);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     @Test
     void editApplicationForLeaveHolidayReplacementAdded() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
         final Person newHolidayReplacement = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        newHolidayReplacement.setId(1);
+        newHolidayReplacement.setId(1L);
 
         final HolidayReplacementEntity newReplacementEntity = new HolidayReplacementEntity();
         newReplacementEntity.setPerson(newHolidayReplacement);
 
-        final Application newApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application newApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         newApplication.setStatus(WAITING);
         newApplication.setId(applicationId);
         newApplication.setHolidayReplacements(List.of(newReplacementEntity));
         when(applicationService.save(newApplication)).thenReturn(newApplication);
 
-        final Application oldApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application oldApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
 
         final Optional<String> comment = of("Comment");
 
@@ -1392,22 +1379,22 @@ class ApplicationInteractionServiceImplTest {
     @Test
     void editApplicationForLeaveHolidayReplacementRemoved() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
-        final Application newApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application newApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         newApplication.setStatus(WAITING);
         newApplication.setId(applicationId);
         when(applicationService.save(newApplication)).thenReturn(newApplication);
 
         final Person oldHolidayReplacement = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        oldHolidayReplacement.setId(2);
+        oldHolidayReplacement.setId(2L);
 
         final HolidayReplacementEntity replacementEntity = new HolidayReplacementEntity();
         replacementEntity.setPerson(oldHolidayReplacement);
 
-        final Application oldApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application oldApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         oldApplication.setHolidayReplacements(List.of(replacementEntity));
 
         final Optional<String> comment = of("Comment");
@@ -1424,17 +1411,17 @@ class ApplicationInteractionServiceImplTest {
     @Test
     void editApplicationForLeaveHolidayRelevantEntriesChangedFromTo() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
         final Person holidayReplacementPerson = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        holidayReplacementPerson.setId(2);
+        holidayReplacementPerson.setId(2L);
 
         final HolidayReplacementEntity replacementEntity = new HolidayReplacementEntity();
         replacementEntity.setPerson(holidayReplacementPerson);
 
-        final Application newApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application newApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         newApplication.setStatus(WAITING);
         newApplication.setId(applicationId);
         newApplication.setStartDate(LocalDate.of(2020, 10, 3));
@@ -1442,7 +1429,7 @@ class ApplicationInteractionServiceImplTest {
         newApplication.setHolidayReplacements(List.of(replacementEntity));
         when(applicationService.save(newApplication)).thenReturn(newApplication);
 
-        final Application oldApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application oldApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         oldApplication.setHolidayReplacements(List.of(replacementEntity));
         oldApplication.setStartDate(LocalDate.of(2020, 10, 4));
         oldApplication.setEndDate(LocalDate.of(2020, 10, 4));
@@ -1461,24 +1448,24 @@ class ApplicationInteractionServiceImplTest {
     @Test
     void editApplicationForLeaveHolidayRelevantEntriesChangedDayLength() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
         final Person holidayReplacementPerson = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        holidayReplacementPerson.setId(2);
+        holidayReplacementPerson.setId(2L);
 
         final HolidayReplacementEntity replacementEntity = new HolidayReplacementEntity();
         replacementEntity.setPerson(holidayReplacementPerson);
 
-        final Application newApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application newApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         newApplication.setStatus(WAITING);
         newApplication.setId(applicationId);
         newApplication.setDayLength(DayLength.FULL);
         newApplication.setHolidayReplacements(List.of(replacementEntity));
         when(applicationService.save(newApplication)).thenReturn(newApplication);
 
-        final Application oldApplication = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application oldApplication = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         oldApplication.setHolidayReplacements(List.of(replacementEntity));
         oldApplication.setDayLength(DayLength.NOON);
 
@@ -1494,10 +1481,10 @@ class ApplicationInteractionServiceImplTest {
     }
 
     @Test
-    void editApplicationForLeaveHasWrongStatus() {
+    void editApplicationForLeaveHasWrongStatusAndIsOwnApplication() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Application application = createApplication(person, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application application = createApplication(person, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         application.setStatus(ALLOWED);
 
         final Optional<String> comment = of("Comment");
@@ -1513,10 +1500,10 @@ class ApplicationInteractionServiceImplTest {
     void editApplicationWithDifferentPerson() {
 
         final Person oldPerson = new Person();
-        final Application oldApplication = createApplication(oldPerson, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application oldApplication = createApplication(oldPerson, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         oldApplication.setStatus(WAITING);
         final Person newPerson = new Person();
-        final Application newApplication = createApplication(newPerson, TestDataCreator.createVacationTypeEntity(HOLIDAY));
+        final Application newApplication = createApplication(newPerson, createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         newApplication.setStatus(WAITING);
 
         final Optional<String> comment = of("Comment");
@@ -1532,7 +1519,7 @@ class ApplicationInteractionServiceImplTest {
     @Test
     void ensureDeletionOfApplicationAndCommentsOnPersonDeletedEvent() {
         final Person person = new Person();
-        final int personId = 42;
+        final long personId = 42;
         person.setId(personId);
 
         sut.deleteAllByPerson(new PersonDeletedEvent(person));
@@ -1545,34 +1532,14 @@ class ApplicationInteractionServiceImplTest {
     }
 
     @Test
-    void ensureDeletionOfAbsenceMappingOnPersonDeletedEvent() {
-        final Person person = new Person();
-        final int personId = 42;
-        person.setId(personId);
-
-        final Application application = new Application();
-        application.setId(42);
-        when(applicationService.deleteApplicationsByPerson(person)).thenReturn(List.of(application));
-
-        final AbsenceMapping absenceMapping = new AbsenceMapping(42, VACATION, "eventId");
-        when(absenceMappingService.getAbsenceByIdAndType(42, VACATION)).thenReturn(Optional.of(absenceMapping));
-
-        sut.deleteAllByPerson(new PersonDeletedEvent(person));
-
-        verify(absenceMappingService).getAbsenceByIdAndType(42, VACATION);
-        verify(absenceMappingService).delete(absenceMapping);
-        verify(calendarSyncService).deleteAbsence("eventId");
-    }
-
-    @Test
     void ensureApplicationDeletedEventsArePublishedWhenPersonIsDeleted() {
 
         final Person person = new Person();
-        final int personId = 42;
+        final long personId = 42;
         person.setId(personId);
 
         final Application application = new Application();
-        application.setId(42);
+        application.setId(42L);
         when(applicationService.deleteApplicationsByPerson(person)).thenReturn(List.of(application));
 
         sut.deleteAllByPerson(new PersonDeletedEvent(person));
@@ -1580,9 +1547,9 @@ class ApplicationInteractionServiceImplTest {
         ArgumentCaptor<ApplicationDeletedEvent> argumentCaptor = ArgumentCaptor.forClass(ApplicationDeletedEvent.class);
         verify(applicationEventPublisher).publishEvent(argumentCaptor.capture());
         final ApplicationDeletedEvent event = argumentCaptor.getValue();
-        assertThat(event.getApplication()).isEqualTo(application);
-        assertThat(event.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.application()).isEqualTo(application);
+        assertThat(event.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(event.id()).isNotNull();
     }
 
     private void assertApplicationForLeaveHasChangedStatus(Application applicationForLeave, ApplicationStatus status,
@@ -1600,19 +1567,9 @@ class ApplicationInteractionServiceImplTest {
         verify(commentService).create(applicationForLeave, action, optionalComment, privilegedUser);
     }
 
-    private void assertNoCalendarSyncIsExecuted() {
-        verifyNoInteractions(calendarSyncService);
-        verifyNoInteractions(absenceMappingService);
-    }
-
     private void assertAllowedNotificationIsSent(Application applicationForLeave) {
         verify(applicationMailService).sendAllowedNotification(eq(applicationForLeave), any(ApplicationComment.class));
         verify(applicationMailService, never()).sendTemporaryAllowedNotification(any(Application.class), any(ApplicationComment.class));
-    }
-
-    private void assertNoCalendarSyncOccurs() {
-        verifyNoInteractions(calendarSyncService);
-        verifyNoInteractions(absenceMappingService);
     }
 
     private void assertTemporaryAllowedNotificationIsSent(Application applicationForLeave) {

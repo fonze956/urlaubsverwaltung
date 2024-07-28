@@ -1,14 +1,15 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
-  <head th:replace="_layout::head(~{::title}, ~{::styles}, ~{::scripts})">
+  <head th:replace="~{_layout::head(title=~{::title}, scriptsDefer=~{::scriptsDefer}, preload=~{::preload})}">
     <title th:text="#{calendar.share.header.title}">Kalenderfreigabe</title>
-    <th:block th:fragment="styles"></th:block>
-    <th:block th:fragment="scripts">
-      <script defer asset:src="copy_to_clipboard_input.js"></script>
-      <script defer asset:src="tabs.js"></script>
+    <th:block th:fragment="preload">
+      <link rel="preload" th:replace="~{fragments/asset-dependency-preload::links('calendar_sharing.js')}" />
+    </th:block>
+    <th:block th:fragment="scriptsDefer">
+      <script defer type="module" asset:src="calendar_sharing.js"></script>
     </th:block>
   </head>
-  <body th:replace="_layout::body(~{::main}, ~{})">
+  <body th:replace="~{_layout::body(~{::main}, ~{})}">
     <main th:fragment="main" class="tw-max-w-6xl tw-mx-auto tw-px-4 lg:tw-px-12 xl:tw-px-0">
       <header>
         <h1 class="tw-mb-8 tw-text-2xl tw-text-medium">
@@ -22,7 +23,7 @@
       </p>
 
       <div class="tw-mb-8">
-        <aside th:replace="fragments/privacy-box::privacy-box(~{::privacy-box-body})">
+        <aside th:replace="~{fragments/privacy-box::privacy-box(~{::privacy-box-body})}">
           <th:block th:fragment="privacy-box-body">
             <p th:text="#{calendar.share.privacy-info.paragraph}" class="tw-space-y-4"></p>
             <p th:text="#{calendar.share.privacy-info.reset}"></p>
@@ -38,7 +39,7 @@
       >
         <div class="tw-mb-4">
           <div
-            th:replace="fragments/section-heading::section-heading(~{::calendarsharing-private-heading-body}, ~{::calendarsharing-private-heading-actions})"
+            th:replace="~{fragments/section-heading::section-heading(~{::calendarsharing-private-heading-body}, ~{::calendarsharing-private-heading-actions})}"
           >
             <th:block th:ref="calendarsharing-private-heading-body">
               <h2 id="calendar-private" class="tw-text-xl">
@@ -144,7 +145,7 @@
 
       <div th:if="${departmentCalendars.size() > 0}" class="tw-mb-8">
         <div
-          th:replace="fragments/section-heading::section-heading(~{::calendarsharing-department-heading-body}, ~{::calendarsharing-department-heading-actions})"
+          th:replace="~{fragments/section-heading::section-heading(~{::calendarsharing-department-heading-body}, ~{::calendarsharing-department-heading-actions})}"
         >
           <th:block th:ref="calendarsharing-department-heading-body">
             <h2 th:text="#{calendar.share.department.title}" id="calendar-department" class="tw-text-xl"></h2>
@@ -278,7 +279,7 @@
 
       <div th:if="${companyCalendarAccessible != null || companyCalendarShare != null}">
         <div
-          th:replace="fragments/section-heading::section-heading(~{::calendarsharing-company-heading-body}, ~{::calendarsharing-company-heading-actions})"
+          th:replace="~{fragments/section-heading::section-heading(~{::calendarsharing-company-heading-body}, ~{::calendarsharing-company-heading-actions})}"
         >
           <th:block th:ref="calendarsharing-company-heading-body">
             <h2 th:text="#{calendar.share.company.title}" id="calendar-company" class="tw-text-xl"></h2>

@@ -1,54 +1,43 @@
 package org.synyx.urlaubsverwaltung.calendarintegration;
 
-import javax.persistence.Column;
-import javax.persistence.Embeddable;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
+
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 
-/**
- * Settings to sync absences with a calendar provider.
- */
-@Deprecated(since = "4.0.0", forRemoval = true)
-@Embeddable
+@Entity(name = "calendar_integration_settings")
 public class CalendarSettings {
 
-    private GoogleCalendarSettings googleCalendarSettings;
+    @Id
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "calendar_settings_generator")
+    @SequenceGenerator(name = "calendar_settings_generator", sequenceName = "calendar_settings_id_seq", allocationSize = 1)
+    private Long id;
 
-    private ExchangeCalendarSettings exchangeCalendarSettings;
+    private GoogleCalendarSettings googleCalendarSettings = new GoogleCalendarSettings();
 
-    @Column(name = "calendar_provider")
-    private String provider = "NoopCalendarSyncProvider";
+    @Column(name = "provider")
+    private String provider;
 
-    public ExchangeCalendarSettings getExchangeCalendarSettings() {
-
-        if (exchangeCalendarSettings == null) {
-            exchangeCalendarSettings = new ExchangeCalendarSettings();
-        }
-
-        return exchangeCalendarSettings;
+    public Long getId() {
+        return id;
     }
 
-
-    public void setExchangeCalendarSettings(ExchangeCalendarSettings exchangeCalendarSettings) {
-
-        this.exchangeCalendarSettings = exchangeCalendarSettings;
+    public void setId(Long id) {
+        this.id = id;
     }
-
 
     public GoogleCalendarSettings getGoogleCalendarSettings() {
-
-        if (googleCalendarSettings == null) {
-            googleCalendarSettings = new GoogleCalendarSettings();
-        }
-
         return googleCalendarSettings;
     }
 
-
     public void setGoogleCalendarSettings(GoogleCalendarSettings googleCalendarSettings) {
-
         this.googleCalendarSettings = googleCalendarSettings;
     }
-
 
     public String getProvider() {
         return provider;

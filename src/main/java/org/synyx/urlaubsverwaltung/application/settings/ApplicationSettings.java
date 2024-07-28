@@ -1,6 +1,6 @@
 package org.synyx.urlaubsverwaltung.application.settings;
 
-import javax.persistence.Embeddable;
+import jakarta.persistence.Embeddable;
 
 /**
  * Settings concerning absence of persons because of vacation or sick days.
@@ -11,7 +11,7 @@ public class ApplicationSettings {
     /**
      * Specifies how many months in advance a person can apply for leave.
      */
-    private Integer maximumMonthsToApplyForLeaveInAdvance = 12;
+    private Integer maximumMonthsToApplyForLeaveInAdvance = 18;
 
     /**
      * Specifies how many months afterwards can a person apply for leave.

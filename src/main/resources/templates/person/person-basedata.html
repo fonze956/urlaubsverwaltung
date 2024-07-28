@@ -1,15 +1,12 @@
-<!DOCTYPE html>
-<html
-  lang="en"
-  th:lang="${language}"
-  th:class="|tw-${theme}|"
-  xmlns:th="http://www.thymeleaf.org"
-  xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
->
-  <head th:replace="~{_layout::head(~{::title}, ~{}, ~{::scripts})}">
+<!doctype html>
+<html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
+  <head th:replace="~{_layout::head(title=~{::title}, scriptsDefer=~{::scriptsDefer}, preload=~{::preload})}">
     <title th:text="#{person.form.basedata.title(${personBasedata.niceName})}"></title>
-    <th:block th:fragment="scripts">
-      <script defer asset:src="person_basedata.js"></script>
+    <th:block th:fragment="preload">
+      <link rel="preload" th:replace="~{fragments/asset-dependency-preload::links('person_basedata.js')}" />
+    </th:block>
+    <th:block th:fragment="scriptsDefer">
+      <script defer type="module" asset:src="person_basedata.js"></script>
     </th:block>
   </head>
   <body th:replace="~{_layout::body(~{::main}, ~{})}">
@@ -43,7 +40,7 @@
                 </a>
                 <th:block th:if="${personBasedata.isInactive}">
                   <span class="tw-mt-1" th:data-title="#{person.data.inactive}">
-                    &nbsp;<svg th:replace="icon/user-x::svg(className='tw-w-4 tw-h-4')" /><span class="tw-sr-only"
+                    &nbsp;<svg th:replace="~{icon/user-x::svg(className='tw-w-4 tw-h-4')}" /><span class="tw-sr-only"
                       >(<th:block th:text="#{person.data.inactive}" />)</span
                     >
                   </span>
@@ -133,9 +130,9 @@
 
           <hr class="tw-w-full tw-m-0 tw-mt-6" />
 
-          <div class="tw-mt-6 tw-flex tw-justify-between">
-            <button type="submit" class="button-main-green" th:text="#{action.save}">Speichern</button>
-            <button data-back-button type="button" class="button" th:text="#{action.cancel}">Cancel</button>
+          <div class="tw-mt-6 tw-flex tw-justify-between tw-gap-4">
+            <button type="submit" class="button-main-green tw-w-56" th:text="#{action.save}">Speichern</button>
+            <button data-back-button th:text="#{action.cancel}" type="button" class="button">Abbrechen</button>
           </div>
         </form>
       </div>

@@ -12,14 +12,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
+import org.springframework.context.support.StaticMessageSource;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.synyx.urlaubsverwaltung.absence.AbsencePeriod;
 import org.synyx.urlaubsverwaltung.absence.AbsenceService;
 import org.synyx.urlaubsverwaltung.absence.DateRange;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeService;
 import org.synyx.urlaubsverwaltung.department.Department;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
@@ -28,10 +29,7 @@ import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.person.Role;
 import org.synyx.urlaubsverwaltung.publicholiday.PublicHoliday;
 import org.synyx.urlaubsverwaltung.publicholiday.PublicHolidaysService;
-import org.synyx.urlaubsverwaltung.settings.Settings;
-import org.synyx.urlaubsverwaltung.settings.SettingsService;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeService;
-import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeSettings;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -44,6 +42,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
+import static java.time.Month.DECEMBER;
 import static java.time.Month.JANUARY;
 import static java.util.Collections.emptyList;
 import static org.hamcrest.CoreMatchers.allOf;
@@ -65,10 +64,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OTHER;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.CYAN;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.ORANGE;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.YELLOW;
 import static org.synyx.urlaubsverwaltung.period.DayLength.FULL;
+import static org.synyx.urlaubsverwaltung.period.DayLength.MORNING;
+import static org.synyx.urlaubsverwaltung.period.DayLength.NOON;
 import static org.synyx.urlaubsverwaltung.person.Role.INACTIVE;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.USER;
@@ -89,8 +91,6 @@ class AbsenceOverviewViewControllerTest {
     @Mock
     private PublicHolidaysService publicHolidaysService;
     @Mock
-    private SettingsService settingsService;
-    @Mock
     private AbsenceService absenceService;
     @Mock
     private WorkingTimeService workingTimeService;
@@ -102,18 +102,14 @@ class AbsenceOverviewViewControllerTest {
     @BeforeEach
     void setUp() {
         sut = new AbsenceOverviewViewController(personService, departmentService, messageSource, clock,
-            publicHolidaysService, settingsService, absenceService, workingTimeService, vacationTypeService);
+            publicHolidaysService, absenceService, workingTimeService, vacationTypeService);
     }
 
     @Test
     void ensureWithDepartmentsAndNotInDepartmentOnlyMyInformation() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("sam");
         person.setLastName("smith");
         person.setEmail("smith@example.org");
@@ -138,10 +134,6 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureWithDepartmentsAndPrivilegedRolesForAllDepartments(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setPermissions(List.of(USER, role));
         person.setFirstName("boss");
@@ -166,12 +158,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"OFFICE", "BOSS", "SECOND_STAGE_AUTHORITY", "DEPARTMENT_HEAD"})
     void ensureNoDepartmentsAndNotInDepartmentGetAllActivePersons(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("sam");
         person.setLastName("smith");
@@ -181,7 +169,7 @@ class AbsenceOverviewViewControllerTest {
         when(departmentService.getNumberOfDepartments()).thenReturn(0L);
 
         final Person activePerson = new Person();
-        activePerson.setId(2);
+        activePerson.setId(2L);
         activePerson.setFirstName("sandra");
         activePerson.setLastName("smith");
         activePerson.setEmail("sandra@example.org");
@@ -200,12 +188,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"OFFICE", "BOSS"})
     void ensureWithDepartmentsAndInDepartmentAndFilterInactivePersonsAsBossOrOffice(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("sam");
         person.setLastName("smith");
@@ -213,14 +197,14 @@ class AbsenceOverviewViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(person);
 
         final Person activePerson = new Person();
-        activePerson.setId(2);
+        activePerson.setId(2L);
         activePerson.setPermissions(List.of(USER));
         activePerson.setFirstName("sandra");
         activePerson.setLastName("smith");
         activePerson.setEmail("sandra@example.org");
 
         final Person inactivePerson = new Person();
-        inactivePerson.setId(2);
+        inactivePerson.setId(2L);
         inactivePerson.setPermissions(List.of(INACTIVE));
         inactivePerson.setFirstName("sandra");
         inactivePerson.setLastName("smith");
@@ -244,12 +228,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"SECOND_STAGE_AUTHORITY", "DEPARTMENT_HEAD"})
     void ensureWithDepartmentsAndInDepartmentAndFilterInactivePersonsAsDHOrSSA(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("sam");
         person.setLastName("smith");
@@ -257,14 +237,14 @@ class AbsenceOverviewViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(person);
 
         final Person activePerson = new Person();
-        activePerson.setId(2);
+        activePerson.setId(2L);
         activePerson.setPermissions(List.of(USER));
         activePerson.setFirstName("sandra");
         activePerson.setLastName("smith");
         activePerson.setEmail("sandra@example.org");
 
         final Person inactivePerson = new Person();
-        inactivePerson.setId(2);
+        inactivePerson.setId(2L);
         inactivePerson.setPermissions(List.of(INACTIVE));
         inactivePerson.setFirstName("sandra");
         inactivePerson.setLastName("smith");
@@ -288,10 +268,6 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"SECOND_STAGE_AUTHORITY", "DEPARTMENT_HEAD"})
     void ensureAbsenceOverviewForDepartmentHeadAndSecondStageAuthority(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final Person person = new Person();
         person.setFirstName("firstname");
         person.setLastName("lastname");
@@ -314,10 +290,6 @@ class AbsenceOverviewViewControllerTest {
     @ValueSource(strings = {"", " "})
     void ensureDefaultSelectedDepartmentIsTheFirstAvailable(String departmentName) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("boss");
         person.setLastName("the hoss");
@@ -340,10 +312,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSelectedDepartment() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("office");
         person.setLastName("user");
@@ -366,10 +334,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureMultipleSelectedDepartments() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("office");
         person.setLastName("user");
@@ -395,10 +359,6 @@ class AbsenceOverviewViewControllerTest {
     @ValueSource(strings = {""})
     void ensureDefaultSelectedYearIsTheCurrentYear(String givenYearParam) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var expectedCurrentYear = LocalDate.now().getYear();
 
         final var person = new Person();
@@ -418,10 +378,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSelectedYear() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var expectedCurrentYear = LocalDate.now().getYear();
         final var expectedSelectedYear = expectedCurrentYear - 1;
 
@@ -446,10 +402,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSelectedMonthIsTheCurrentMonthWhenParamIsNotDefined() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var now = LocalDate.now();
 
         final var person = new Person();
@@ -469,10 +421,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSelectedMonthIsEmptyStringWhenParamIsDefinedAsEmptyString() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("boss");
         person.setLastName("the hoss");
@@ -491,10 +439,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSelectedMonthWhenParamIsDefined() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("boss");
         person.setLastName("the hoss");
@@ -512,10 +456,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureMonthDayTextIsPadded() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("boss");
         person.setLastName("the hoss");
@@ -547,14 +487,10 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewForGivenYear() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final Clock fixedClock = Clock.fixed(Instant.parse("2018-10-17T00:00:00.00Z"), ZoneId.systemDefault());
 
         sut = new AbsenceOverviewViewController(personService, departmentService, messageSource, fixedClock,
-            publicHolidaysService, settingsService, absenceService, workingTimeService, vacationTypeService);
+            publicHolidaysService, absenceService, workingTimeService, vacationTypeService);
 
         final var person = new Person();
         person.setFirstName("boss");
@@ -578,14 +514,10 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewForGivenMonthNovember() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         when(messageSource.getMessage(anyString(), any(), any())).thenReturn("awesome month text");
 
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("boss");
         person.setLastName("the hoss");
         person.setEmail("boss@example.org");
@@ -617,14 +549,10 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewForGivenMonthDecember() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         when(messageSource.getMessage(anyString(), any(), any())).thenReturn("awesome month text");
 
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("boss");
         person.setLastName("the hoss");
         person.setEmail("boss@example.org");
@@ -656,18 +584,13 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewForGivenYearAndGivenMonth() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
-
         sut = new AbsenceOverviewViewController(personService, departmentService, messageSource, clock,
-            publicHolidaysService, settingsService, absenceService, workingTimeService, vacationTypeService);
+            publicHolidaysService, absenceService, workingTimeService, vacationTypeService);
 
         when(messageSource.getMessage(anyString(), any(), any())).thenReturn("awesome month text");
 
         final var person = new Person();
-        person.setId(13);
+        person.setId(13L);
         person.setFirstName("boss");
         person.setLastName("the hoss");
         person.setEmail("boss@example.org");
@@ -700,10 +623,6 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewForGivenDepartment() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
         person.setFirstName("bruce");
         person.setLastName("wayne");
@@ -714,11 +633,11 @@ class AbsenceOverviewViewControllerTest {
         heroDepartment.setMembers(List.of(person));
 
         final var joker = person("joker");
-        joker.setId(1);
+        joker.setId(1L);
         final var lex = person("lex");
-        lex.setId(2);
+        lex.setId(2L);
         final var harley = person("harley");
-        harley.setId(3);
+        harley.setId(3L);
         final var villainsDepartment = department("villains");
         villainsDepartment.setMembers(List.of(joker, lex, harley));
 
@@ -738,13 +657,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureDistinctPersonOverviewForGivenDepartments() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
-
         final var person = new Person();
-        person.setId(5);
+        person.setId(5L);
         person.setFirstName("bruce");
         person.setLastName("wayne");
         person.setEmail("batman@example.org");
@@ -754,11 +668,11 @@ class AbsenceOverviewViewControllerTest {
         heroDepartment.setMembers(List.of(person));
 
         final var joker = person("joker");
-        joker.setId(1);
+        joker.setId(1L);
         final var lex = person("lex");
-        lex.setId(2);
+        lex.setId(2L);
         final var harley = person("harley");
-        harley.setId(3);
+        harley.setId(3L);
         final var villainsDepartment = department("villains");
         villainsDepartment.setMembers(List.of(joker, lex, harley, person));
 
@@ -779,19 +693,15 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewDefaultCurrentYearAndMonth() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final Clock fixedClock = Clock.fixed(Instant.parse("2020-10-17T00:00:00.00Z"), ZoneId.systemDefault());
 
         sut = new AbsenceOverviewViewController(personService, departmentService, messageSource, fixedClock,
-            publicHolidaysService, settingsService, absenceService, workingTimeService, vacationTypeService);
+            publicHolidaysService, absenceService, workingTimeService, vacationTypeService);
 
         when(messageSource.getMessage(anyString(), any(), any())).thenReturn("awesome month text");
 
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("boss");
         person.setLastName("the hoss");
         person.setEmail("boss@example.org");
@@ -821,26 +731,21 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOverviewPersonsAreSortedByFirstName() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
-
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("boss");
         person.setLastName("the hoss");
         person.setEmail("boss@example.org");
         when(personService.getSignedInUser()).thenReturn(person);
 
         final var personTwo = new Person();
-        personTwo.setId(2);
+        personTwo.setId(2L);
         personTwo.setFirstName("aa");
         personTwo.setLastName("aa lastname");
         personTwo.setEmail("person2@example.org");
 
         final var personThree = new Person();
-        personThree.setId(3);
+        personThree.setId(3L);
         personThree.setFirstName("AA");
         personThree.setLastName("AA lastname");
         personThree.setEmail("person3@example.org");
@@ -876,12 +781,8 @@ class AbsenceOverviewViewControllerTest {
     @MethodSource("privilegedRoleAndAbsenceStatusWaitingArguments")
     void ensureAbsenceMorningWaitingForPrivilegedPerson(Role role, AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -892,12 +793,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(42L).color(ORANGE).category(VacationCategory.HOLIDAY).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "HOLIDAY", 42L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -927,9 +826,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -949,12 +851,8 @@ class AbsenceOverviewViewControllerTest {
     @MethodSource("privilegedRoleAndAbsenceStatusWaitingArguments")
     void ensureAbsenceNoonWaitingForPrivilegedPerson(Role role, AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -965,12 +863,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1000,9 +896,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1022,12 +921,8 @@ class AbsenceOverviewViewControllerTest {
     @MethodSource("privilegedRoleAndAbsenceStatusWaitingArguments")
     void ensureAbsenceFullWaitingForPrivilegedPerson(Role role, AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1038,13 +933,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1074,9 +967,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1106,12 +1002,8 @@ class AbsenceOverviewViewControllerTest {
     @MethodSource("privilegedRoleAndAbsenceStatusTemporaryAllowedArguments")
     void ensureAbsenceMorningTemporaryAllowedForPrivilegedPerson(Role role, AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1122,12 +1014,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1157,9 +1047,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -1179,12 +1072,8 @@ class AbsenceOverviewViewControllerTest {
     @MethodSource("privilegedRoleAndAbsenceStatusTemporaryAllowedArguments")
     void ensureAbsenceNoonTemporaryAllowedForPrivilegedPerson(Role role, AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1195,12 +1084,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1230,9 +1117,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1252,12 +1142,8 @@ class AbsenceOverviewViewControllerTest {
     @MethodSource("privilegedRoleAndAbsenceStatusTemporaryAllowedArguments")
     void ensureAbsenceFullTemporaryAllowedForPrivilegedPerson(Role role, AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1268,13 +1154,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1304,9 +1188,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1327,12 +1214,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"WAITING"})
     void ensureAbsenceMorningWaitingForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -1343,16 +1226,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, "other", false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, VacationCategory.OTHER, "other", false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1380,9 +1264,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -1402,12 +1289,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"WAITING"})
     void ensureOwnAbsenceMorningWaitingForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1418,9 +1301,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).category(OTHER).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, VacationCategory.OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1448,9 +1332,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(CYAN)),
@@ -1470,12 +1357,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"WAITING"})
     void ensureAbsenceNoonWaitingForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -1486,16 +1369,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1523,9 +1407,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1545,12 +1432,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"WAITING"})
     void ensureOwnAbsenceNoonWaitingForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1561,9 +1444,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1591,9 +1475,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1613,12 +1500,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"WAITING"})
     void ensureAbsenceFullWaitingForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -1629,17 +1512,18 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, absenceStatus, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1667,9 +1551,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1689,12 +1576,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"WAITING"})
     void ensureOwnAbsenceFullWaitingForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1705,10 +1588,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1736,9 +1620,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1754,17 +1641,12 @@ class AbsenceOverviewViewControllerTest {
             ));
     }
 
-
     @ParameterizedTest
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"TEMPORARY_ALLOWED"})
     void ensureAbsenceMorningTemporaryAllowedForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -1775,16 +1657,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, "other", false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, "other", false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1812,9 +1695,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -1834,12 +1720,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"TEMPORARY_ALLOWED"})
     void ensureOwnAbsenceMorningTemporaryAllowedForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1850,9 +1732,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1880,9 +1763,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(CYAN)),
@@ -1902,12 +1788,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"TEMPORARY_ALLOWED"})
     void ensureAbsenceNoonTemporaryAllowedForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -1918,16 +1800,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -1955,9 +1838,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -1977,12 +1863,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"TEMPORARY_ALLOWED"})
     void ensureOwnAbsenceNoonTemporaryAllowedForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -1993,9 +1875,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2023,9 +1906,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2045,12 +1931,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"TEMPORARY_ALLOWED"})
     void ensureAbsenceFullTemporaryAllowedForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -2061,17 +1943,18 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, absenceStatus, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2099,9 +1982,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2121,12 +2007,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = AbsencePeriod.AbsenceStatus.class, names = {"TEMPORARY_ALLOWED"})
     void ensureOwnAbsenceFullTemporaryAllowedForNotPrivilegedPerson(AbsencePeriod.AbsenceStatus absenceStatus) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2137,10 +2019,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, absenceStatus, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, absenceStatus, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, absenceStatus, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2168,9 +2051,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2193,12 +2079,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceMorningApprovedForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2209,12 +2091,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2244,9 +2124,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -2266,12 +2149,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceNoonApprovedForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2282,12 +2161,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2317,9 +2194,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2339,12 +2219,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceFullWaitingForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2355,13 +2231,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2391,9 +2265,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2414,12 +2291,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceMorningApprovedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -2430,16 +2303,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2467,9 +2341,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -2488,12 +2365,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceMorningApprovedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2504,9 +2377,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2534,9 +2408,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(CYAN)),
@@ -2555,12 +2432,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceNoonApprovedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -2571,16 +2444,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2608,9 +2482,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2628,12 +2505,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceNoonApprovedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2644,9 +2517,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2674,9 +2548,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2694,12 +2571,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceFullApprovedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -2710,17 +2583,18 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2748,9 +2622,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2768,12 +2645,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceFullApprovedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2784,10 +2657,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2815,9 +2689,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2839,12 +2716,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceMorningCancellationRequestedForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2855,12 +2728,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2890,9 +2761,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(true)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -2912,12 +2786,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceNoonCancellationRequestedForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -2928,12 +2798,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -2963,9 +2831,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(true)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -2985,12 +2856,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceFullCancellationRequestedForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3001,13 +2868,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3037,9 +2902,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(true)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3059,12 +2927,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceMorningCancellationRequestedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -3075,16 +2939,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3112,9 +2977,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -3133,12 +3001,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceMorningCancellationRequestedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3149,9 +3013,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3179,9 +3044,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(true)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(CYAN)),
@@ -3200,12 +3068,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceNoonCancellationRequestedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -3216,16 +3080,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3253,9 +3118,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3273,12 +3141,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceNoonCancellationRequestedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3289,9 +3153,10 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3319,9 +3184,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(true)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3339,12 +3207,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceFullCancellationRequestedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -3355,17 +3219,18 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3393,9 +3258,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3413,12 +3281,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceFullCancellationRequestedForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3429,10 +3293,11 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1, true, VacationCategory.OTHER, null, false, VacationTypeColor.CYAN, false)));
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()));
+//        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(new VacationType(1L, true, OTHER, null, false, false, CYAN, false)));
 
-        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
-        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, 1, false);
+        final AbsencePeriod.RecordMorningVacation morning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
+        final AbsencePeriod.RecordNoonVacation noon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED_CANCELLATION_REQUESTED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3460,9 +3325,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(true)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3484,12 +3352,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureSickNoteMorningForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3500,7 +3364,7 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1);
+        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3530,9 +3394,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(true)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3551,12 +3418,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureSickNoteNoonForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3567,7 +3430,7 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3597,9 +3460,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(true)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(true)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3619,12 +3485,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureSickNoteFullForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3635,8 +3497,8 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1);
-        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
+        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3666,9 +3528,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(true)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(true)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3688,12 +3553,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSickNoteMorningForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -3704,14 +3565,14 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(other, 1);
+        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3739,9 +3600,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -3759,12 +3623,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnSickNoteMorningForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3775,7 +3635,7 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1);
+        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, null);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3803,9 +3663,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(true)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(true)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3823,12 +3686,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSickNoteNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -3839,14 +3698,14 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(other, 1);
+        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3874,9 +3733,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3895,12 +3757,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnSickNoteNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -3911,7 +3769,7 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, null, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -3939,9 +3797,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(true)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(true)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -3960,12 +3821,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureSickNoteFullForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -3976,15 +3833,15 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(other, 1);
-        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(other, 1);
+        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
+        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), other, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -4012,9 +3869,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -4032,12 +3892,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnSickNoteFullForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4048,8 +3904,8 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1);
-        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordMorningSick morning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
+        final AbsencePeriod.RecordNoonSick noon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record record = new AbsencePeriod.Record(LocalDate.now(clock), person, morning, noon);
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(record));
 
@@ -4077,9 +3933,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(true)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(true)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -4099,14 +3958,15 @@ class AbsenceOverviewViewControllerTest {
 
     @ParameterizedTest
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
-    void ensureAbsenceMorningAndSickNoteNoonForPrivilegedPerson(Role role) throws Exception {
+    void ensureChristmasEveOnMorningForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
+        final LocalDate december24 = LocalDate.of(2024, DECEMBER, 24);
+        final LocalDate firstOfMonth = LocalDate.of(2024, DECEMBER, 1);
+        final LocalDate lastOfMonth = LocalDate.of(2024, DECEMBER, 31);
+        final DateRange dateRange = new DateRange(firstOfMonth, lastOfMonth);
+
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4117,16 +3977,134 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of());
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        when(workingTimeService.getFederalStatesByPersonAndDateRange(person, dateRange))
+            .thenReturn(Map.of(dateRange, GERMANY_BADEN_WUERTTEMBERG));
+
+        when(publicHolidaysService.getPublicHolidays(firstOfMonth, lastOfMonth, GERMANY_BADEN_WUERTTEMBERG))
+            .thenReturn(List.of(new PublicHoliday(december24, MORNING, "Heiligabend")));
+
+        final AbsencePeriod.RecordMorningPublicHoliday christmasEveMorning = new AbsencePeriod.RecordMorningPublicHoliday(person);
+        final AbsencePeriod.Record christmasEveRecord = new AbsencePeriod.Record(december24, person, christmasEveMorning, null);
+        final AbsencePeriod absencePeriod = new AbsencePeriod(List.of(christmasEveRecord));
+        when(absenceService.getOpenAbsences(List.of(person), firstOfMonth, lastOfMonth)).thenReturn(List.of(absencePeriod));
+
+        when(personService.getActivePersons()).thenReturn(List.of(person));
+
+        final ResultActions perform = perform(
+            get("/web/absences").locale(Locale.GERMANY)
+                .param("year", "2024")
+                .param("month", "12")
+        );
+        perform
+            .andExpect(status().isOk())
+            .andExpect(model().attribute("absenceOverview",
+                hasProperty("months", contains(
+                    hasProperty("persons", hasItem(
+                        hasProperty("days", hasItems(
+                            hasProperty("type",
+                                allOf(
+                                    hasProperty("absenceMorning", is(false)),
+                                    hasProperty("absenceNoon", is(false)),
+                                    hasProperty("absenceFull", is(false)),
+                                    hasProperty("publicHolidayMorning", is(true)),
+                                    hasProperty("publicHolidayNoon", is(false)),
+                                    hasProperty("publicHolidayFull", is(false))
+                                )
+                            )
+                        ))
+                    ))
+                ))
+            ));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
+    void ensureChristmasEveOnNoonForPrivilegedPerson(Role role) throws Exception {
+
+        final LocalDate december24 = LocalDate.of(2024, DECEMBER, 24);
+        final LocalDate firstOfMonth = LocalDate.of(2024, DECEMBER, 1);
+        final LocalDate lastOfMonth = LocalDate.of(2024, DECEMBER, 31);
+        final DateRange dateRange = new DateRange(firstOfMonth, lastOfMonth);
+
+        final var person = new Person();
+        person.setId(1L);
+        person.setPermissions(List.of(USER, role));
+        person.setFirstName("Bruce");
+        person.setLastName("Springfield");
+        person.setEmail("springfield@example.org");
+        when(personService.getSignedInUser()).thenReturn(person);
+
+        final var department = department();
+        department.setMembers(List.of(person));
+        when(departmentService.getNumberOfDepartments()).thenReturn(1L);
+
+        when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of());
+
+        when(workingTimeService.getFederalStatesByPersonAndDateRange(person, dateRange))
+            .thenReturn(Map.of(dateRange, GERMANY_BADEN_WUERTTEMBERG));
+
+        when(publicHolidaysService.getPublicHolidays(firstOfMonth, lastOfMonth, GERMANY_BADEN_WUERTTEMBERG))
+            .thenReturn(List.of(new PublicHoliday(december24, NOON, "Heiligabend")));
+
+        final AbsencePeriod.RecordNoonPublicHoliday christmasEveNoon = new AbsencePeriod.RecordNoonPublicHoliday(person);
+        final AbsencePeriod.Record christmasEveRecord = new AbsencePeriod.Record(december24, person, null, christmasEveNoon);
+        final AbsencePeriod absencePeriod = new AbsencePeriod(List.of(christmasEveRecord));
+
+        when(absenceService.getOpenAbsences(List.of(person), firstOfMonth, lastOfMonth)).thenReturn(List.of(absencePeriod));
+
+        when(personService.getActivePersons()).thenReturn(List.of(person));
+
+        perform(
+            get("/web/absences").locale(Locale.GERMANY)
+                .param("year", "2024")
+                .param("month", "12")
+        )
+            .andExpect(status().isOk())
+            .andExpect(model().attribute("absenceOverview",
+                hasProperty("months", contains(
+                    hasProperty("persons", hasItem(
+                        hasProperty("days", hasItems(
+                            hasProperty("type",
+                                allOf(
+                                    hasProperty("absenceMorning", is(false)),
+                                    hasProperty("absenceNoon", is(false)),
+                                    hasProperty("absenceFull", is(false)),
+                                    hasProperty("publicHolidayMorning", is(false)),
+                                    hasProperty("publicHolidayNoon", is(true)),
+                                    hasProperty("publicHolidayFull", is(false))
+                                )
+                            )
+                        ))
+                    ))
+                ))
+            ));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
+    void ensureAbsenceMorningAndSickNoteNoonForPrivilegedPerson(Role role) throws Exception {
+
+        final var person = new Person();
+        person.setId(1L);
+        person.setPermissions(List.of(USER, role));
+        person.setFirstName("Bruce");
+        person.setLastName("Springfield");
+        person.setEmail("springfield@example.org");
+        when(personService.getSignedInUser()).thenReturn(person);
+
+        final var department = department();
+        department.setMembers(List.of(person));
+        when(departmentService.getNumberOfDepartments()).thenReturn(1L);
+
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, null, sickNoteNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4157,9 +4135,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(true)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(true)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -4179,12 +4160,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureAbsenceNoonAndSickNoteMorningForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4195,15 +4172,13 @@ class AbsenceOverviewViewControllerTest {
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(ORANGE);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, null, vacationNoon);
 
-        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(person, 1);
+        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, sickNoteMorning, null);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4234,9 +4209,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(true)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(true)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -4257,12 +4235,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceMorningAndSickNoteNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -4273,17 +4247,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), other, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(other, 1);
+        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), other, null, sickNoteNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4314,9 +4288,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -4334,31 +4311,25 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceMorningAndSickNoteNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
         person.setEmail("springfield@example.org");
         when(personService.getSignedInUser()).thenReturn(person);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(CYAN);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
         final var department = department();
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, null, sickNoteNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4389,9 +4360,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(true)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(true)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(CYAN)),
@@ -4409,12 +4383,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureAbsenceNoonAndSickNoteMorningForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -4425,17 +4395,17 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
         when(departmentService.getDepartmentsPersonHasAccessTo(signedInUser)).thenReturn(List.of(department));
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), other, null, vacationNoon);
 
-        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(other, 1);
+        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), other, sickNoteMorning, null);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4466,9 +4436,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -4486,31 +4459,25 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnAbsenceNoonAndSickNoteMorningForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
         person.setEmail("springfield@example.org");
         when(personService.getSignedInUser()).thenReturn(person);
 
-        final VacationType vacationType = new VacationType();
-        vacationType.setId(1);
-        vacationType.setColor(CYAN);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(vacationType));
 
         final var department = department();
         department.setMembers(List.of(person));
         when(departmentService.getNumberOfDepartments()).thenReturn(1L);
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, null, vacationNoon);
 
-        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(person, 1);
+        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, sickNoteMorning, null);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4541,9 +4508,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(true)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(true)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -4561,12 +4531,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureColoredAbsenceMorningAndOwnSickNoteNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4579,14 +4545,15 @@ class AbsenceOverviewViewControllerTest {
 
         when(vacationTypeService.getAllVacationTypes()).thenReturn(
             List.of(
-                new VacationType(1, true, null, "", false, CYAN, true)
+                ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()
+//                new VacationType(1L, true, null, "", false, false, CYAN, true)
             )
         );
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, true);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, true);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(person, 1);
+        final AbsencePeriod.RecordNoonSick sickNoteNoon = new AbsencePeriod.RecordNoonSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, null, sickNoteNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4617,9 +4584,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(true)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(true)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(CYAN)),
@@ -4637,12 +4607,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureColoredAbsenceNoonAndSickNoteMorningForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -4653,7 +4619,7 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
@@ -4662,14 +4628,15 @@ class AbsenceOverviewViewControllerTest {
 
         when(vacationTypeService.getAllVacationTypes()).thenReturn(
             List.of(
-                new VacationType(1, true, null, "", false, CYAN, true)
+                ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()
+//                new VacationType(1L, true, null, "", false, false, CYAN, true)
             )
         );
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, true);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, true);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), other, null, vacationNoon);
 
-        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(other, 1);
+        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(other, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), other, sickNoteMorning, null);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4700,9 +4667,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -4720,12 +4690,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnColoredAbsenceNoonAndSickNoteMorningForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4738,14 +4704,15 @@ class AbsenceOverviewViewControllerTest {
 
         when(vacationTypeService.getAllVacationTypes()).thenReturn(
             List.of(
-                new VacationType(1, true, null, "", false, CYAN, true)
+                ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(CYAN).build()
+//                new VacationType(1L, true, null, "", false, false, CYAN, true)
             )
         );
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, true);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, true);
         final AbsencePeriod.Record vacationRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, null, vacationNoon);
 
-        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(person, 1);
+        final AbsencePeriod.RecordMorningSick sickNoteMorning = new AbsencePeriod.RecordMorningSick(person, 1L, AbsencePeriod.AbsenceStatus.ACTIVE, "SICK_NOTE", 1L);
         final AbsencePeriod.Record sickNoteRecord = new AbsencePeriod.Record(LocalDate.now(clock), person, sickNoteMorning, null);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(vacationRecord, sickNoteRecord));
@@ -4776,9 +4743,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(true)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(true)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", nullValue()),
@@ -4797,12 +4767,8 @@ class AbsenceOverviewViewControllerTest {
     @EnumSource(value = Role.class, names = {"BOSS", "OFFICE"})
     void ensureDifferentAbsenceMorningAndNoonForPrivilegedPerson(Role role) throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, role));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4815,14 +4781,16 @@ class AbsenceOverviewViewControllerTest {
 
         when(vacationTypeService.getAllVacationTypes())
             .thenReturn(List.of(
-                new VacationType(1, true, null, "", false, ORANGE, false),
-                new VacationType(2, true, null, "", false, CYAN, false)
+                ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build(),
+                ProvidedVacationType.builder(new StaticMessageSource()).id(2L).color(CYAN).build()
+//                new VacationType(1L, true, null, "", false, false, ORANGE, false),
+//                new VacationType(2L, true, null, "", false, false, CYAN, false)
             ));
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record recordOrange = new AbsencePeriod.Record(LocalDate.now(clock), person, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 2, AbsencePeriod.AbsenceStatus.ALLOWED, 2, false);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 2L, AbsencePeriod.AbsenceStatus.ALLOWED, "Familientag", 2L, false);
         final AbsencePeriod.Record recordCyan = new AbsencePeriod.Record(LocalDate.now(clock), person, null, vacationNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(recordOrange, recordCyan));
@@ -4853,9 +4821,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -4874,12 +4845,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureDifferentAbsenceMorningAndNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Springfield");
@@ -4890,7 +4857,7 @@ class AbsenceOverviewViewControllerTest {
         other.setFirstName("Dorie");
         other.setLastName("Fisch");
         other.setEmail("dorie@example.org");
-        other.setId(2);
+        other.setId(2L);
 
         final var department = department();
         department.setMembers(List.of(signedInUser, other));
@@ -4899,14 +4866,16 @@ class AbsenceOverviewViewControllerTest {
 
         when(vacationTypeService.getAllVacationTypes())
             .thenReturn(List.of(
-                new VacationType(1, true, null, "", false, ORANGE, false),
-                new VacationType(2, true, null, "", false, CYAN, false)
+                ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build(),
+                ProvidedVacationType.builder(new StaticMessageSource()).id(2L).color(CYAN).build()
+//                new VacationType(1L, true, null, "", false, false, ORANGE, false),
+//                new VacationType(2L, true, null, "", false, false, CYAN, false)
             ));
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(other, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(other, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record recordOrange = new AbsencePeriod.Record(LocalDate.now(clock), other, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(other, 2, AbsencePeriod.AbsenceStatus.ALLOWED, 2, false);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(other, 2L, AbsencePeriod.AbsenceStatus.ALLOWED, "Familientag", 2L, false);
         final AbsencePeriod.Record recordCyan = new AbsencePeriod.Record(LocalDate.now(clock), other, null, vacationNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(recordOrange, recordCyan));
@@ -4935,9 +4904,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(YELLOW)),
@@ -4956,12 +4928,8 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureOwnDifferentAbsenceMorningAndNoonForNotPrivilegedPerson() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
         person.setFirstName("Bruce");
         person.setLastName("Springfield");
@@ -4974,14 +4942,16 @@ class AbsenceOverviewViewControllerTest {
 
         when(vacationTypeService.getAllVacationTypes())
             .thenReturn(List.of(
-                new VacationType(1, true, null, "", false, ORANGE, false),
-                new VacationType(2, true, null, "", false, CYAN, false)
+                ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(ORANGE).build(),
+                ProvidedVacationType.builder(new StaticMessageSource()).id(2L).color(CYAN).build()
+//                new VacationType(1L, true, null, "", false, false, ORANGE, false),
+//                new VacationType(2L, true, null, "", false, false, CYAN, false)
             ));
 
-        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1, AbsencePeriod.AbsenceStatus.ALLOWED, 1, false);
+        final AbsencePeriod.RecordMorningVacation vacationMorning = new AbsencePeriod.RecordMorningVacation(person, 1L, AbsencePeriod.AbsenceStatus.ALLOWED, "Erholungsurlaub", 1L, false);
         final AbsencePeriod.Record recordOrange = new AbsencePeriod.Record(LocalDate.now(clock), person, vacationMorning, null);
 
-        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 2, AbsencePeriod.AbsenceStatus.ALLOWED, 2, false);
+        final AbsencePeriod.RecordNoonVacation vacationNoon = new AbsencePeriod.RecordNoonVacation(person, 2L, AbsencePeriod.AbsenceStatus.ALLOWED, "Familientag", 2L, false);
         final AbsencePeriod.Record recordCyan = new AbsencePeriod.Record(LocalDate.now(clock), person, null, vacationNoon);
 
         final AbsencePeriod absencePeriodVacation = new AbsencePeriod(List.of(recordOrange, recordCyan));
@@ -5010,9 +4980,12 @@ class AbsenceOverviewViewControllerTest {
                                     hasProperty("allowedCancellationRequestedAbsenceFull", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceMorning", is(false)),
                                     hasProperty("allowedCancellationRequestedAbsenceNoon", is(false)),
-                                    hasProperty("sickNoteFull", is(false)),
-                                    hasProperty("sickNoteMorning", is(false)),
-                                    hasProperty("sickNoteNoon", is(false)),
+                                    hasProperty("waitingSickNoteFull", is(false)),
+                                    hasProperty("waitingSickNoteMorning", is(false)),
+                                    hasProperty("waitingSickNoteNoon", is(false)),
+                                    hasProperty("activeSickNoteFull", is(false)),
+                                    hasProperty("activeSickNoteMorning", is(false)),
+                                    hasProperty("activeSickNoteNoon", is(false)),
                                     hasProperty("color",
                                         allOf(
                                             hasProperty("morning", is(ORANGE)),
@@ -5031,17 +5004,13 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureWeekendsAndHolidays() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final Clock fixedClock = Clock.fixed(Instant.parse("2020-12-01T00:00:00.00Z"), ZoneId.systemDefault());
 
         sut = new AbsenceOverviewViewController(personService, departmentService, messageSource, fixedClock,
-            publicHolidaysService, settingsService, absenceService, workingTimeService, vacationTypeService);
+            publicHolidaysService, absenceService, workingTimeService, vacationTypeService);
 
         final var person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("boss");
         person.setLastName("the hoss");
         person.setEmail("boss@example.org");
@@ -5093,14 +5062,10 @@ class AbsenceOverviewViewControllerTest {
     @Test
     void ensureToday() throws Exception {
 
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
         final Clock fixedClock = Clock.fixed(Instant.parse("2020-12-10T00:00:00.00Z"), ZoneId.systemDefault());
 
         sut = new AbsenceOverviewViewController(personService, departmentService, messageSource, fixedClock,
-            publicHolidaysService, settingsService, absenceService, workingTimeService, vacationTypeService);
+            publicHolidaysService, absenceService, workingTimeService, vacationTypeService);
 
         final var person = new Person();
         person.setFirstName("boss");
@@ -5155,11 +5120,11 @@ class AbsenceOverviewViewControllerTest {
     void ensurePublicHolidaysBasedOnCustomPublicHolidays() throws Exception {
 
         final Person personWithCustomPublicHolidays = person("joker");
-        personWithCustomPublicHolidays.setId(1);
+        personWithCustomPublicHolidays.setId(1L);
         when(personService.getSignedInUser()).thenReturn(personWithCustomPublicHolidays);
 
         final Person personDefaultPublicHolidays = person("lex");
-        personDefaultPublicHolidays.setId(2);
+        personDefaultPublicHolidays.setId(2L);
 
         when(departmentService.getNumberOfDepartments()).thenReturn(0L);
         when(personService.getActivePersons()).thenReturn(List.of(personWithCustomPublicHolidays, personDefaultPublicHolidays));
@@ -5172,12 +5137,6 @@ class AbsenceOverviewViewControllerTest {
 
         when(publicHolidaysService.getPublicHolidays(start, end, GERMANY_BADEN_WUERTTEMBERG)).thenReturn(List.of(new PublicHoliday(LocalDate.of(2022, JANUARY, 6), FULL, "")));
         when(publicHolidaysService.getPublicHolidays(start, end, GERMANY_RHEINLAND_PFALZ)).thenReturn(emptyList());
-
-        final Settings settings = new Settings();
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setFederalState(GERMANY_RHEINLAND_PFALZ);
-        settings.setWorkingTimeSettings(workingTimeSettings);
-        when(settingsService.getSettings()).thenReturn(settings);
 
         perform(get("/web/absences")
             .param("year", "2022")

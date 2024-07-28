@@ -2,11 +2,11 @@ package org.synyx.urlaubsverwaltung.sicknote.sickdays;
 
 import org.junit.jupiter.api.Test;
 import org.synyx.urlaubsverwaltung.absence.DateRange;
-import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNote;
 import org.synyx.urlaubsverwaltung.sicknote.sicknotetype.SickNoteType;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar;
+import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -23,6 +23,7 @@ import static org.synyx.urlaubsverwaltung.sicknote.sickdays.SickDays.SickDayType
 import static org.synyx.urlaubsverwaltung.sicknote.sickdays.SickDays.SickDayType.WITH_AUB;
 import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteCategory.SICK_NOTE;
 import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteCategory.SICK_NOTE_CHILD;
+import static org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation.WorkingTimeCalendarEntryType.WORKDAY;
 
 class SickDaysDetailedStatisticsTest {
 
@@ -30,17 +31,21 @@ class SickDaysDetailedStatisticsTest {
     void ensureGetSickDays() {
 
         final Person person = new Person("username", "last name", "first name", "email@example.org");
-        person.setId(1);
+        person.setId(1L);
 
         final SickNoteType sickNoteType = new SickNoteType();
-        sickNoteType.setId(1);
+        sickNoteType.setId(1L);
         sickNoteType.setCategory(SICK_NOTE);
 
-        final Map<LocalDate, DayLength> workingTimes = buildWorkingTimeByDate(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 12, 31), (date) -> FULL);
+        final Map<LocalDate, WorkingDayInformation> workingTimes = buildWorkingTimeByDate(
+            LocalDate.of(2022, 1, 1),
+            LocalDate.of(2022, 12, 31),
+            (date) -> new WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimes);
 
         final SickNote sickNoteOne = SickNote.builder()
-            .id(1)
+            .id(1L)
             .person(person)
             .applier(person)
             .sickNoteType(sickNoteType)
@@ -51,7 +56,7 @@ class SickDaysDetailedStatisticsTest {
             .build();
 
         final SickNote sickNoteTwo = SickNote.builder()
-            .id(2)
+            .id(2L)
             .person(person)
             .applier(person)
             .sickNoteType(sickNoteType)
@@ -76,14 +81,14 @@ class SickDaysDetailedStatisticsTest {
     void ensureGetSickDaysIgnoresSickNotesOutOfDateRange() {
 
         final Person person = new Person("username", "last name", "first name", "email@example.org");
-        person.setId(1);
+        person.setId(1L);
 
         final SickNoteType sickNoteType = new SickNoteType();
-        sickNoteType.setId(1);
+        sickNoteType.setId(1L);
         sickNoteType.setCategory(SICK_NOTE);
 
         final SickNote sickNote = SickNote.builder()
-            .id(1)
+            .id(1L)
             .sickNoteType(sickNoteType)
             .startDate(LocalDate.of(2022, JUNE, 20))
             .endDate(LocalDate.of(2022, JUNE, 24))
@@ -102,14 +107,14 @@ class SickDaysDetailedStatisticsTest {
     void ensureGetSickDaysIgnoresChildSickNotes() {
 
         final Person person = new Person("username", "last name", "first name", "email@example.org");
-        person.setId(1);
+        person.setId(1L);
 
         final SickNoteType childSickNoteType = new SickNoteType();
-        childSickNoteType.setId(1);
+        childSickNoteType.setId(1L);
         childSickNoteType.setCategory(SICK_NOTE_CHILD);
 
         final SickNote childSickNote = SickNote.builder()
-            .id(1)
+            .id(1L)
             .sickNoteType(childSickNoteType)
             .startDate(LocalDate.of(2022, JUNE, 20))
             .endDate(LocalDate.of(2022, JUNE, 24))
@@ -128,17 +133,21 @@ class SickDaysDetailedStatisticsTest {
     void ensureGetChildSickDays() {
 
         final Person person = new Person("username", "last name", "first name", "email@example.org");
-        person.setId(1);
+        person.setId(1L);
 
         final SickNoteType childSickNoteType = new SickNoteType();
-        childSickNoteType.setId(1);
+        childSickNoteType.setId(1L);
         childSickNoteType.setCategory(SICK_NOTE_CHILD);
 
-        final Map<LocalDate, DayLength> workingTimes = buildWorkingTimeByDate(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 12, 31), (date) -> FULL);
+        final Map<LocalDate, WorkingDayInformation> workingTimes = buildWorkingTimeByDate(
+            LocalDate.of(2022, 1, 1),
+            LocalDate.of(2022, 12, 31),
+            (date) -> new WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimes);
 
         final SickNote childSickNoteOne = SickNote.builder()
-            .id(1)
+            .id(1L)
             .person(person)
             .applier(person)
             .sickNoteType(childSickNoteType)
@@ -149,7 +158,7 @@ class SickDaysDetailedStatisticsTest {
             .build();
 
         final SickNote childSickNoteTwo = SickNote.builder()
-            .id(2)
+            .id(2L)
             .person(person)
             .applier(person)
             .sickNoteType(childSickNoteType)
@@ -174,14 +183,14 @@ class SickDaysDetailedStatisticsTest {
     void ensureGetChildSickDaysIgnoresSickNotesOutOfRange() {
 
         final Person person = new Person("username", "last name", "first name", "email@example.org");
-        person.setId(1);
+        person.setId(1L);
 
         final SickNoteType childSickNoteType = new SickNoteType();
-        childSickNoteType.setId(1);
+        childSickNoteType.setId(1L);
         childSickNoteType.setCategory(SICK_NOTE_CHILD);
 
         final SickNote childSickNote = SickNote.builder()
-            .id(1)
+            .id(1L)
             .sickNoteType(childSickNoteType)
             .startDate(LocalDate.of(2022, JUNE, 20))
             .endDate(LocalDate.of(2022, JUNE, 24))
@@ -200,14 +209,14 @@ class SickDaysDetailedStatisticsTest {
     void ensureGetChildSickDaysIgnoresSickNotes() {
 
         final Person person = new Person("username", "last name", "first name", "email@example.org");
-        person.setId(1);
+        person.setId(1L);
 
         final SickNoteType sickNoteType = new SickNoteType();
-        sickNoteType.setId(1);
+        sickNoteType.setId(1L);
         sickNoteType.setCategory(SICK_NOTE);
 
         final SickNote sickNote = SickNote.builder()
-            .id(1)
+            .id(1L)
             .sickNoteType(sickNoteType)
             .startDate(LocalDate.of(2022, JUNE, 20))
             .endDate(LocalDate.of(2022, JUNE, 24))
@@ -222,8 +231,8 @@ class SickDaysDetailedStatisticsTest {
         assertThat(actual.getDays()).containsEntry(WITH_AUB.name(), BigDecimal.ZERO);
     }
 
-    private Map<LocalDate, DayLength> buildWorkingTimeByDate(LocalDate from, LocalDate to, Function<LocalDate, DayLength> dayLengthProvider) {
-        Map<LocalDate, DayLength> map = new HashMap<>();
+    private Map<LocalDate, WorkingDayInformation> buildWorkingTimeByDate(LocalDate from, LocalDate to, Function<LocalDate, WorkingDayInformation> dayLengthProvider) {
+        Map<LocalDate, WorkingDayInformation> map = new HashMap<>();
         for (LocalDate date : new DateRange(from, to)) {
             map.put(date, dayLengthProvider.apply(date));
         }

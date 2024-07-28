@@ -23,13 +23,7 @@ import java.util.Optional;
  * <p>
  * Should be used in combination with a {@link Map} to keep relation to a {@link org.synyx.urlaubsverwaltung.person.Person} for example.
  */
-public class WorkingTimeCalendar {
-
-    private final Map<LocalDate, DayLength> workingTimeByDate;
-
-    public WorkingTimeCalendar(Map<LocalDate, DayLength> workingTimeByDate) {
-        this.workingTimeByDate = workingTimeByDate;
-    }
+public record WorkingTimeCalendar(Map<LocalDate, WorkingDayInformation> workingDays) {
 
     /**
      * @param application
@@ -85,8 +79,8 @@ public class WorkingTimeCalendar {
      * @return the {@linkplain DayLength} workingTime for the given date (e.g. DayLength.MORNING), or empty {@linkplain Optional} when there is no entry found.
      */
     public Optional<DayLength> workingTimeDayLength(LocalDate localDate) {
-        if (workingTimeByDate.containsKey(localDate)) {
-            return Optional.of(workingTimeByDate.get(localDate));
+        if (workingDays.containsKey(localDate)) {
+            return Optional.of(workingDays.get(localDate).dayLength());
         }
         return Optional.empty();
     }
@@ -104,14 +98,26 @@ public class WorkingTimeCalendar {
 
         BigDecimal sum = BigDecimal.ZERO;
 
-        for (Map.Entry<LocalDate, DayLength> entry : workingTimeByDate.entrySet()) {
+        for (Map.Entry<LocalDate, WorkingDayInformation> entry : workingDays.entrySet()) {
             final LocalDate localDate = entry.getKey();
             if (!localDate.isBefore(from) && !localDate.isAfter(to)) {
-                final DayLength dayLength = entry.getValue();
+                final DayLength dayLength = entry.getValue().dayLength();
                 sum = sum.add(dayLength.getDuration());
             }
         }
 
         return sum;
+    }
+
+    public record WorkingDayInformation(
+        DayLength dayLength,
+        WorkingDayInformation.WorkingTimeCalendarEntryType morning,
+        WorkingDayInformation.WorkingTimeCalendarEntryType noon
+    ) {
+        public enum WorkingTimeCalendarEntryType {
+            WORKDAY,
+            NO_WORKDAY,
+            PUBLIC_HOLIDAY
+        }
     }
 }

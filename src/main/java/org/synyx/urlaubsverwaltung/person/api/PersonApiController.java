@@ -2,44 +2,44 @@ package org.synyx.urlaubsverwaltung.person.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.synyx.urlaubsverwaltung.absence.AbsenceApiController;
+import org.springframework.web.server.ResponseStatusException;
 import org.synyx.urlaubsverwaltung.api.RestControllerAdviceMarker;
-import org.synyx.urlaubsverwaltung.availability.api.AvailabilityApiController;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
-import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteApiController;
-import org.synyx.urlaubsverwaltung.vacations.VacationApiController;
-import org.synyx.urlaubsverwaltung.workingtime.WorkDaysCountApiController;
 
 import java.util.List;
 
-import static java.util.stream.Collectors.toList;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
+import static org.springframework.hateoas.MediaTypes.HAL_JSON_VALUE;
+import static org.springframework.http.HttpStatus.CONFLICT;
+import static org.springframework.http.HttpStatus.CREATED;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 import static org.springframework.http.HttpStatus.OK;
-import static org.synyx.urlaubsverwaltung.absence.AbsenceApiController.ABSENCES;
-import static org.synyx.urlaubsverwaltung.availability.api.AvailabilityApiController.AVAILABILITIES;
-import static org.synyx.urlaubsverwaltung.security.SecurityRules.IS_OFFICE;
-import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteApiController.SICKNOTES;
-import static org.synyx.urlaubsverwaltung.vacations.VacationApiController.VACATIONS;
-import static org.synyx.urlaubsverwaltung.workingtime.WorkDaysCountApiController.WORKDAYS;
+import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
+import static org.synyx.urlaubsverwaltung.person.api.PersonMapper.mapToDto;
+import static org.synyx.urlaubsverwaltung.security.SecurityRules.IS_BOSS_OR_OFFICE;
 
+@Tag(
+    name = "persons",
+    description = """
+        Returns information about persons and provides links to further information like absences, sick notes, ...
+        """
+)
 @RestControllerAdviceMarker
-@Tag(name = "persons", description = "Persons: Get information about the persons of the application")
 @RestController
-@RequestMapping(PersonApiController.ROOT_URL)
+@RequestMapping("/api/persons")
 public class PersonApiController {
-
-    static final String ROOT_URL = "/api/persons";
-    private static final String PERSON_URL = "/{id}";
 
     private final PersonService personService;
 
@@ -49,38 +49,99 @@ public class PersonApiController {
     }
 
     @Operation(
-        summary = "Get all active persons of the application",
-        description = "Get all active persons of the application"
+        summary = "Returns the person by current authentication",
+        description = """
+            Returns the current authenticated person.
+
+            Needed basic authorities:
+            * user
+            """
     )
-    @GetMapping
-    @PreAuthorize(IS_OFFICE)
-    public ResponseEntity<List<PersonDto>> persons() {
+    @GetMapping(path = "/me", produces = HAL_JSON_VALUE)
+    @PreAuthorize("hasAuthority('USER')")
+    public ResponseEntity<PersonDto> me(@AuthenticationPrincipal OidcUser oidcUser) {
+        if (oidcUser == null) {
+            return new ResponseEntity<>(NOT_FOUND);
+        }
 
-        List<PersonDto> persons = personService.getActivePersons().stream()
-            .map(this::createPersonResponse)
-            .collect(toList());
-
-        return new ResponseEntity<>(persons, OK);
-    }
-
-    @Operation(summary = "Get one active person by id", description = "Get one active person by id")
-    @GetMapping(PERSON_URL)
-    @PreAuthorize(IS_OFFICE)
-    public ResponseEntity<PersonDto> getPerson(@PathVariable Integer id) {
-
-        return personService.getPersonByID(id)
-            .map(value -> new ResponseEntity<>(createPersonResponse(value), OK))
+        return personService.getPersonByUsername(oidcUser.getSubject())
+            .map(person -> new ResponseEntity<>(mapToDto(person), OK))
             .orElseGet(() -> new ResponseEntity<>(NOT_FOUND));
     }
 
-    private PersonDto createPersonResponse(Person person) {
-        final PersonDto personDto = PersonMapper.mapToDto(person);
-        personDto.add(linkTo(methodOn(PersonApiController.class).getPerson(person.getId())).withSelfRel());
-        personDto.add(linkTo(methodOn(AbsenceApiController.class).personsAbsences(person.getId(), null, null, null, false)).withRel(ABSENCES));
-        personDto.add(linkTo(methodOn(AvailabilityApiController.class).personsAvailabilities(person.getId(), null, null)).withRel(AVAILABILITIES));
-        personDto.add(linkTo(methodOn(SickNoteApiController.class).personsSickNotes(person.getId(), null, null)).withRel(SICKNOTES));
-        personDto.add(linkTo(methodOn(VacationApiController.class).getVacations(person.getId(), null, null)).withRel(VACATIONS));
-        personDto.add(linkTo(methodOn(WorkDaysCountApiController.class).personsWorkDays(person.getId(), null, null, null)).withRel(WORKDAYS));
-        return personDto;
+    @Operation(
+        summary = "Return the person with the given id",
+        description = """
+            Returns the person with the given id.
+
+            Needed basic authorities:
+            * user
+
+            Needed additional authorities:
+            * user                   - if the requested person id is the one of the authenticated user
+            * department_head        - if the requested person id is a managed person of the department head and not of the authenticated user
+            * second_stage_authority - if the requested person id is a managed person of the second stage authority and not of the authenticated user
+            * boss or office         - if the requested person id is any id but not of the authenticated user
+            """
+    )
+    @GetMapping(path = "/{personId}", produces = {APPLICATION_JSON_VALUE, HAL_JSON_VALUE})
+    @PreAuthorize(IS_BOSS_OR_OFFICE +
+        " or @userApiMethodSecurity.isSamePersonId(authentication, #personId)" +
+        " or @userApiMethodSecurity.isInDepartmentOfDepartmentHead(authentication, #personId)" +
+        " or @userApiMethodSecurity.isInDepartmentOfSecondStageAuthority(authentication, #personId)")
+    public ResponseEntity<PersonDto> getPerson(@PathVariable Long personId) {
+        return personService.getPersonByID(personId)
+            .map(person -> new ResponseEntity<>(mapToDto(person), OK))
+            .orElseGet(() -> new ResponseEntity<>(NOT_FOUND));
+    }
+
+    @Operation(
+        summary = "Returns all active persons",
+        description = """
+            Returns all active persons.
+
+            Needed basic authorities:
+            * user
+
+            Needed additional authorities:
+            * boss
+            * office
+            """
+    )
+    @GetMapping(produces = {APPLICATION_JSON_VALUE, HAL_JSON_VALUE})
+    @PreAuthorize(IS_BOSS_OR_OFFICE)
+    public ResponseEntity<PersonsDto> persons() {
+
+        final List<PersonDto> persons = personService.getActivePersons().stream()
+            .map(PersonMapper::mapToDto)
+            .toList();
+
+        return new ResponseEntity<>(new PersonsDto(persons), OK);
+    }
+
+
+    @Operation(
+        summary = "Creates a new person",
+        description = """
+            Creates a new person with the given parameters of firstName, lastName and email.
+
+            Needed basic authorities:
+            * user
+
+            Needed additional authorities:
+            * person_add
+            """
+    )
+    @PreAuthorize("hasAuthority('PERSON_ADD')")
+    @PostMapping(consumes = APPLICATION_JSON_VALUE, produces = {APPLICATION_JSON_VALUE, HAL_JSON_VALUE})
+    public ResponseEntity<PersonDto> create(@RequestBody @Valid PersonProvisionDto personProvisionDto) {
+
+        final String predictedUsername = personProvisionDto.getEmail();
+        if (personService.getPersonByUsername(predictedUsername).isPresent()) {
+            throw new ResponseStatusException(CONFLICT);
+        }
+
+        final Person person = personService.create(predictedUsername, personProvisionDto.getFirstName(), personProvisionDto.getLastName(), personProvisionDto.getEmail());
+        return new ResponseEntity<>(mapToDto(person), CREATED);
     }
 }

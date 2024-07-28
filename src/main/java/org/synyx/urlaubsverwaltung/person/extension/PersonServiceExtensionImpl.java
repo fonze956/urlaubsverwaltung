@@ -3,7 +3,6 @@ package org.synyx.urlaubsverwaltung.person.extension;
 import de.focus_shift.urlaubsverwaltung.extension.api.person.PersonDTO;
 import de.focus_shift.urlaubsverwaltung.extension.api.person.PersonServiceExtension;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 import org.synyx.urlaubsverwaltung.extension.ExtensionConfiguration;
@@ -15,6 +14,8 @@ import org.synyx.urlaubsverwaltung.search.PageableSearchQuery;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import static java.lang.invoke.MethodHandles.lookup;
+import static org.slf4j.LoggerFactory.getLogger;
 import static org.synyx.urlaubsverwaltung.person.extension.PersonDTOMapper.toPerson;
 import static org.synyx.urlaubsverwaltung.person.extension.PersonDTOMapper.toPersonDTO;
 
@@ -22,7 +23,7 @@ import static org.synyx.urlaubsverwaltung.person.extension.PersonDTOMapper.toPer
 @Service
 public class PersonServiceExtensionImpl implements PersonServiceExtension {
 
-    private static final Logger LOG = LoggerFactory.getLogger(PersonServiceExtensionImpl.class);
+    private static final Logger LOG = getLogger(lookup().lookupClass());
 
     private final PersonService personService;
 
@@ -48,7 +49,7 @@ public class PersonServiceExtensionImpl implements PersonServiceExtension {
     }
 
     @Override
-    public void delete(PersonDTO person, Integer signedInUserId) {
+    public void delete(PersonDTO person, Long signedInUserId) {
         personService.getPersonByID(signedInUserId)
             .ifPresentOrElse(
                 signedInUser -> personService.delete(toPerson(person), signedInUser),
@@ -57,7 +58,7 @@ public class PersonServiceExtensionImpl implements PersonServiceExtension {
     }
 
     @Override
-    public Optional<PersonDTO> getPersonById(Integer id) {
+    public Optional<PersonDTO> getPersonById(Long id) {
         return personService.getPersonByID(id)
             .map(PersonDTOMapper::toPersonDTO);
     }

@@ -10,12 +10,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.synyx.urlaubsverwaltung.TestDataCreator;
+import org.springframework.context.support.StaticMessageSource;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
 import org.synyx.urlaubsverwaltung.person.Role;
@@ -25,7 +25,6 @@ import org.synyx.urlaubsverwaltung.settings.SettingsService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,12 +37,12 @@ import static java.time.temporal.TemporalAdjusters.lastDayOfMonth;
 import static java.time.temporal.TemporalAdjusters.lastDayOfYear;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OVERTIME;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.USER;
 
@@ -117,10 +116,10 @@ class OvertimeServiceImplTest {
     void ensureRecordingOvertimeSendsNotificationFromManagement() {
 
         final Person author = new Person();
-        author.setId(1);
+        author.setId(1L);
 
         final Person person = new Person();
-        person.setId(2);
+        person.setId(2L);
 
         final Overtime overtime = new Overtime();
         overtime.setPerson(person);
@@ -156,7 +155,7 @@ class OvertimeServiceImplTest {
     void ensureCreatesCommentWithCorrectActionForExistentOvertime() {
 
         final Overtime overtime = new Overtime();
-        overtime.setId(1);
+        overtime.setId(1L);
         final Person author = new Person();
 
         sut.record(overtime, Optional.empty(), author);
@@ -210,31 +209,18 @@ class OvertimeServiceImplTest {
     @Test
     void ensureGetByIDCallsCorrectDAOMethod() {
 
-        sut.getOvertimeById(42);
+        sut.getOvertimeById(42L);
 
-        verify(overtimeRepository).findById(42);
+        verify(overtimeRepository).findById(42L);
     }
 
     @Test
     void ensureReturnsEmptyOptionalIfNoOvertimeFoundForID() {
 
-        when(overtimeRepository.findById(anyInt())).thenReturn(Optional.empty());
+        when(overtimeRepository.findById(anyLong())).thenReturn(Optional.empty());
 
-        final Optional<Overtime> maybeOvertime = sut.getOvertimeById(42);
+        final Optional<Overtime> maybeOvertime = sut.getOvertimeById(42L);
         assertThat(maybeOvertime).isEmpty();
-    }
-
-    // Get overtime records for person and year ------------------------------------------------------------------------
-    @Test
-    void ensureGetRecordsByPersonAndYearCallsCorrectDAOMethod() {
-
-        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-
-        sut.getOvertimeRecordsForPersonAndYear(person, 2015);
-
-        final LocalDate firstDay = LocalDate.of(2015, 1, 1);
-        final LocalDate lastDay = LocalDate.of(2015, 12, 31);
-        verify(overtimeRepository).findByPersonAndStartDateBetweenOrderByStartDateDesc(person, firstDay, lastDay);
     }
 
     // Get overtime comments -------------------------------------------------------------------------------------------
@@ -252,16 +238,12 @@ class OvertimeServiceImplTest {
     void ensureReturnsZeroIfPersonHasNoOvertimeRecordsYetForTheGivenYear() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-
-        when(overtimeRepository.findByPersonAndStartDateBetweenOrderByStartDateDesc(eq(person), any(LocalDate.class), any(LocalDate.class)))
-            .thenReturn(Collections.emptyList());
+        final LocalDate firstDayOfYear = LocalDate.of(2016, 1, 1);
+        final LocalDate lastDayOfYear = LocalDate.of(2016, 12, 31);
+        when(overtimeRepository.findByPersonAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(person, firstDayOfYear, lastDayOfYear)).thenReturn(List.of());
 
         final Duration totalHours = sut.getTotalOvertimeForPersonAndYear(person, 2016);
         assertThat(totalHours).isEqualTo(Duration.ZERO);
-
-        final LocalDate firstDayOfYear = LocalDate.of(2016, 1, 1);
-        final LocalDate lastDayOfYear = LocalDate.of(2016, 12, 31);
-        verify(overtimeRepository).findByPersonAndStartDateBetweenOrderByStartDateDesc(person, firstDayOfYear, lastDayOfYear);
     }
 
     @Test
@@ -269,21 +251,15 @@ class OvertimeServiceImplTest {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
-        final Overtime overtimeRecord = TestDataCreator.createOvertimeRecord(person);
-        overtimeRecord.setDuration(Duration.ofHours(1));
-
-        final Overtime otherOvertimeRecord = TestDataCreator.createOvertimeRecord(person);
-        otherOvertimeRecord.setDuration(Duration.ofHours(10));
-
-        when(overtimeRepository.findByPersonAndStartDateBetweenOrderByStartDateDesc(eq(person), any(LocalDate.class), any(LocalDate.class)))
-            .thenReturn(List.of(overtimeRecord, otherOvertimeRecord));
-
-        final Duration totalHours = sut.getTotalOvertimeForPersonAndYear(person, 2016);
-        assertThat(totalHours).isEqualTo(Duration.ofHours(11));
+        final Overtime overtimeRecord = new Overtime(person, LocalDate.of(2016, 1, 5), LocalDate.of(2016, 1, 5), Duration.ofHours(1));
+        final Overtime otherOvertimeRecord = new Overtime(person, LocalDate.of(2016, 2, 5), LocalDate.of(2016, 2, 5), Duration.ofHours(10));
 
         final LocalDate firstDayOfYear = LocalDate.of(2016, 1, 1);
         final LocalDate lastDayOfYear = LocalDate.of(2016, 12, 31);
-        verify(overtimeRepository).findByPersonAndStartDateBetweenOrderByStartDateDesc(person, firstDayOfYear, lastDayOfYear);
+        when(overtimeRepository.findByPersonAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(person, firstDayOfYear, lastDayOfYear)).thenReturn(List.of(overtimeRecord, otherOvertimeRecord));
+
+        final Duration totalHours = sut.getTotalOvertimeForPersonAndYear(person, 2016);
+        assertThat(totalHours).isEqualTo(Duration.ofHours(11));
     }
 
     @Test
@@ -294,16 +270,13 @@ class OvertimeServiceImplTest {
         final Overtime overtime = new Overtime(person, LocalDate.of(2016, 1, 5), LocalDate.of(2016, 1, 5), Duration.ofHours(10));
         final Overtime overtime2 = new Overtime(person, LocalDate.of(2016, 2, 5), LocalDate.of(2016, 2, 5), Duration.ofHours(4));
 
-        final LocalDate firstDateOfYear = LocalDate.of(2016, 1, 1);
-        when(overtimeRepository.findByPersonAndStartDateIsBefore(person, firstDateOfYear))
-            .thenReturn(List.of(overtime, overtime2));
+        final LocalDate firstDayOfYear = LocalDate.of(2017, 1, 1);
+        final LocalDate lastDayOfBeforeYear = firstDayOfYear.minusYears(1).with(lastDayOfYear());
+        when(overtimeRepository.findByPersonAndStartDateIsBefore(person, firstDayOfYear)).thenReturn(List.of(overtime, overtime2));
+        when(applicationService.getTotalOvertimeReductionOfPersonUntil(person, lastDayOfBeforeYear)).thenReturn(Duration.ofHours(1));
 
-        when(applicationService.getTotalOvertimeReductionOfPersonBefore(person, firstDateOfYear)).thenReturn(Duration.ofHours(1));
-
-        final Duration totalHours = sut.getTotalOvertimeForPersonBeforeYear(person, 2016);
+        final Duration totalHours = sut.getTotalOvertimeForPersonBeforeYear(person, 2017);
         assertThat(totalHours).isEqualTo(Duration.ofHours(13));
-
-        verify(overtimeRepository).findByPersonAndStartDateIsBefore(person, firstDateOfYear);
     }
 
     // Get left overtime -----------------------------------------------------------------------------------------------
@@ -349,62 +322,28 @@ class OvertimeServiceImplTest {
         assertThat(leftOvertime).isEqualTo(Duration.ZERO);
     }
 
-
     @Test
-    void ensureLeftOvertimeOfPersonIsZeroIfNoOvertimeAndOvertimeReductionIsFound() {
+    void ensureToExcludeApplicationsIdsForLeftOvertimeForPerson() {
 
-        final Person person = new Person();
-        final LocalDate start = LocalDate.of(2022, 10, 10);
-        final LocalDate end = LocalDate.of(2022, 10, 20);
-        when(overtimeRepository.findByPersonAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(person, start, end)).thenReturn(List.of());
-        when(applicationService.getTotalOvertimeReductionOfPerson(person, start, end)).thenReturn(Duration.ZERO);
+        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
-        final Duration totalOvertimeReduction = sut.getLeftOvertimeForPerson(person, start, end);
-        assertThat(totalOvertimeReduction).isZero();
-    }
+        when(overtimeRepository.calculateTotalHoursForPerson(person)).thenReturn(Optional.of((double) Duration.ofHours(10L).toMinutes() / 60));
+        when(applicationService.getTotalOvertimeReductionOfPerson(person)).thenReturn(Duration.ofHours(5));
 
-    @Test
-    void ensureLeftOvertimeOfPersonIsZeroIfApplicationIsInRange() {
+        final VacationType<?> overtimeVacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).category(OVERTIME).build();
+        final Application applicationToEdit = new Application();
+        applicationToEdit.setId(1L);
+        applicationToEdit.setPerson(person);
+        applicationToEdit.setStatus(ApplicationStatus.ALLOWED);
+        applicationToEdit.setVacationType(overtimeVacationType);
+        applicationToEdit.setHours(Duration.ofHours(1L));
+        applicationToEdit.setStartDate(LocalDate.now(clock).withMonth(JANUARY.getValue()));
+        applicationToEdit.setEndDate(LocalDate.now(clock).withMonth(JANUARY.getValue()));
 
-        final Person person = new Person();
-        final LocalDate start = LocalDate.of(2022, 10, 10);
-        final LocalDate end = LocalDate.of(2022, 10, 20);
+        when(applicationService.findApplicationsByIds(List.of(applicationToEdit.getId()))).thenReturn(List.of(applicationToEdit));
 
-        final Overtime overtime = new Overtime(person, LocalDate.of(2022, 10, 9), LocalDate.of(2022, 10, 12), Duration.ofHours(12));
-        when(overtimeRepository.findByPersonAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(person, start, end)).thenReturn(List.of(overtime));
-        when(applicationService.getTotalOvertimeReductionOfPerson(person, start, end)).thenReturn(Duration.ofHours(4));
-
-        final Duration totalOvertimeReduction = sut.getLeftOvertimeForPerson(person, start, end);
-        assertThat(totalOvertimeReduction).isEqualTo(Duration.ofHours(5));
-    }
-
-    @Test
-    void ensureLeftOvertimeOfPersonIsZeroIfApplicationIsAtStart() {
-
-        final Person person = new Person();
-        final LocalDate start = LocalDate.of(2022, 10, 10);
-        final LocalDate end = LocalDate.of(2022, 10, 20);
-
-        final Overtime overtime = new Overtime(person, LocalDate.of(2022, 10, 20), LocalDate.of(2022, 10, 23), Duration.ofHours(12));
-        when(overtimeRepository.findByPersonAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(person, start, end)).thenReturn(List.of(overtime));
-        when(applicationService.getTotalOvertimeReductionOfPerson(person, start, end)).thenReturn(Duration.ofHours(4));
-
-        final Duration totalOvertimeReduction = sut.getLeftOvertimeForPerson(person, start, end);
-        assertThat(totalOvertimeReduction).isEqualTo(Duration.ofHours(-1));
-    }
-
-    @Test
-    void ensureTotalOvertimeReductionOfPersonWithApplicationEndOfRange() {
-
-        final Person person = new Person();
-        final LocalDate start = LocalDate.of(2022, 10, 10);
-        final LocalDate end = LocalDate.of(2022, 10, 20);
-
-        final Overtime overtime = new Overtime(person, LocalDate.of(2022, 10, 20), LocalDate.of(2022, 10, 22), Duration.ofHours(12));
-        when(overtimeRepository.findByPersonAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(person, start, end)).thenReturn(List.of(overtime));
-
-        final Duration totalOvertimeReduction = sut.getLeftOvertimeForPerson(person, start, end);
-        assertThat(totalOvertimeReduction).isEqualTo(Duration.parse("PT4H"));
+        final Duration totalHours = sut.getLeftOvertimeForPerson(person, List.of(overtimeVacationType.getId()));
+        assertThat(totalHours).isEqualTo(Duration.ofHours(6));
     }
 
     @ParameterizedTest
@@ -486,10 +425,10 @@ class OvertimeServiceImplTest {
         final LocalDate to = LocalDate.now(clock).withMonth(AUGUST.getValue()).with(lastDayOfMonth());
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
         final Person person2 = new Person();
-        person2.setId(2);
+        person2.setId(2L);
 
         final List<Person> persons = List.of(person, person2);
 
@@ -545,10 +484,10 @@ class OvertimeServiceImplTest {
         final LocalDate to = LocalDate.now(clock).withMonth(AUGUST.getValue()).with(lastDayOfMonth());
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
         final Person person2 = new Person();
-        person2.setId(2);
+        person2.setId(2L);
 
         final List<Person> persons = List.of(person, person2);
 
@@ -581,15 +520,16 @@ class OvertimeServiceImplTest {
         when(overtimeRepository.findByPersonIsInAndEndDateIsGreaterThanEqualAndStartDateIsLessThanEqual(persons, from, to))
             .thenReturn(List.of(overtimeOne, overtimeTwo));
 
-        final VacationTypeEntity overtimeVacationTypeEntity = new VacationTypeEntity();
-        overtimeVacationTypeEntity.setId(1);
-        overtimeVacationTypeEntity.setCategory(VacationCategory.OVERTIME);
+        final VacationType<?> overtimeVacationType = ProvidedVacationType.builder(new StaticMessageSource())
+            .id(1L)
+            .category(OVERTIME)
+            .build();
 
         final Application personOvertimeReduction = new Application();
-        personOvertimeReduction.setId(1);
+        personOvertimeReduction.setId(1L);
         personOvertimeReduction.setPerson(person);
         personOvertimeReduction.setStatus(ApplicationStatus.ALLOWED);
-        personOvertimeReduction.setVacationType(overtimeVacationTypeEntity);
+        personOvertimeReduction.setVacationType(overtimeVacationType);
         personOvertimeReduction.setHours(Duration.ofMinutes(90));
         // overtime reduction should result in `overall`. NOT in `date range`.
         personOvertimeReduction.setStartDate(LocalDate.now(clock).withMonth(JANUARY.getValue()));
@@ -618,7 +558,7 @@ class OvertimeServiceImplTest {
         final LocalDate to = LocalDate.now(clock).withMonth(AUGUST.getValue()).with(lastDayOfMonth());
 
         final Person personWithoutOvertime = new Person();
-        personWithoutOvertime.setId(1);
+        personWithoutOvertime.setId(1L);
 
         final List<Person> persons = List.of(personWithoutOvertime);
 
@@ -647,20 +587,6 @@ class OvertimeServiceImplTest {
         final InOrder inOrder = inOrder(overtimeCommentRepository, overtimeRepository);
         inOrder.verify(overtimeCommentRepository).deleteByOvertimePerson(person);
         inOrder.verify(overtimeRepository).deleteByPerson(person);
-    }
-
-    private static OvertimeDurationSum overtimeDurationSum(Person person, Double duration) {
-        return new OvertimeDurationSum() {
-            @Override
-            public Person getPerson() {
-                return person;
-            }
-
-            @Override
-            public Double getDurationDouble() {
-                return duration;
-            }
-        };
     }
 
     private Settings overtimeSettings(boolean overtimeWritePrivilegedOnly) {

@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static java.lang.invoke.MethodHandles.lookup;
 import static org.slf4j.LoggerFactory.getLogger;
@@ -57,20 +56,22 @@ class MailServiceImpl implements MailService {
             final Locale effectiveLocale = effectiveLocales.get(recipient);
 
             final Context context = new Context(effectiveLocale);
-            context.setVariables(mail.getTemplateModel());
+            context.setVariables(mail.getTemplateModel(effectiveLocale));
             context.setVariable("baseLinkURL", getApplicationUrl());
             context.setVariable("rightPadder", RightPadder.getInstance());
             context.setVariable("recipient", recipient);
 
-            final String sender = generateMailAddressAndDisplayName(mailProperties.getSender(), mailProperties.getSenderDisplayName());
+            final String from = generateMailAddressAndDisplayName(mailProperties.getFrom(), mailProperties.getFromDisplayName());
+            final String replyTo = generateMailAddressAndDisplayName(mailProperties.getReplyTo(), mailProperties.getReplyToDisplayName());
+
             final String email = recipient.getEmail();
             final String subject = getTranslation(effectiveLocale, mail.getSubjectMessageKey(), mail.getSubjectMessageArguments());
             final String body = emailTemplateEngine.process(mail.getTemplateName(), context);
 
             if (email != null) {
                 mail.getMailAttachments().ifPresentOrElse(
-                    mailAttachments -> mailSenderService.sendEmail(sender, email, subject, body, mailAttachments),
-                    () -> mailSenderService.sendEmail(sender, email, subject, body)
+                    mailAttachments -> mailSenderService.sendEmail(from, replyTo, email, subject, body, mailAttachments),
+                    () -> mailSenderService.sendEmail(from, replyTo, email, subject, body)
                 );
             } else {
                 LOG.debug("Could not send mail to E-Mail-Address of person with id {}, because email is null.", recipient.getId());
@@ -83,11 +84,9 @@ class MailServiceImpl implements MailService {
         final List<Person> recipients = new ArrayList<>();
         mail.getMailAddressRecipients().ifPresent(recipients::addAll);
 
-        if (mail.isSendToTechnicalMail()) {
-            recipients.add(new Person(null, null, "Administrator", mailProperties.getAdministrator()));
-        }
-
-        return recipients.stream().distinct().collect(Collectors.toList());
+        return recipients.stream()
+            .distinct()
+            .toList();
     }
 
     private String getTranslation(Locale locale, String key, Object... args) {

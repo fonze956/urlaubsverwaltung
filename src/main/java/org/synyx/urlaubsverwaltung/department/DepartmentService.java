@@ -24,7 +24,7 @@ public interface DepartmentService {
      * @param departmentId id of a {@link Department} to check
      * @return <code>true</code> if the departmentId exists, <code>false</code> otherwise
      */
-    boolean departmentExists(Integer departmentId);
+    boolean departmentExists(Long departmentId);
 
     /**
      * Returns a department by its unique identifier
@@ -32,7 +32,15 @@ public interface DepartmentService {
      * @param departmentId the unique identifier to of a department
      * @return department to given id
      */
-    Optional<Department> getDepartmentById(Integer departmentId);
+    Optional<Department> getDepartmentById(Long departmentId);
+
+    /**
+     * Returns a department by its name
+     *
+     * @param departmentName the name of a department
+     * @return department to given name
+     */
+    Optional<Department> getDepartmentByName(String departmentName);
 
     /**
      * adds the given department to repository.
@@ -53,7 +61,7 @@ public interface DepartmentService {
      *
      * @param departmentId the unique identifier to delete a department
      */
-    void delete(Integer departmentId);
+    void delete(Long departmentId);
 
     /**
      * @return all departments ordered by the department name
@@ -64,7 +72,7 @@ public interface DepartmentService {
      * Finds all departments the given person is member of.
      *
      * @param member to get the departments of
-     * @return list of departments the given person is assigned to
+     * @return list of departments the given person is assigned to ordered by the department name
      */
     List<Department> getAssignedDepartmentsOfMember(Person member);
 
@@ -72,7 +80,7 @@ public interface DepartmentService {
      * Finds all departments the given person is set as department head.
      *
      * @param departmentHead to get the departments of
-     * @return list of departments the department head manages
+     * @return list of departments the department head manages ordered by the department name
      */
     List<Department> getManagedDepartmentsOfDepartmentHead(Person departmentHead);
 
@@ -80,7 +88,7 @@ public interface DepartmentService {
      * Finds all departments the given person is set as second stage authority.
      *
      * @param secondStageAuthority to get the departments of
-     * @return list of departments the second stage authority manages
+     * @return list of departments the second stage authority manages ordered by the department name
      */
     List<Department> getManagedDepartmentsOfSecondStageAuthority(Person secondStageAuthority);
 
@@ -109,7 +117,7 @@ public interface DepartmentService {
      * @param endDate   of the period
      * @return list of waiting or allowed applications for leave of departments members
      */
-    List<Application> getApplicationsForLeaveOfMembersInDepartmentsOfPerson(Person member, LocalDate startDate, LocalDate endDate);
+    List<Application> getApplicationsFromColleaguesOf(Person member, LocalDate startDate, LocalDate endDate);
 
     /**
      * Get all distinct members of the departments where the given person is department head.
@@ -156,7 +164,7 @@ public interface DepartmentService {
      * Managed members are all persons for which a privileged person are responsible
      * for and can perform actions for this person.
      *
-     * @param person                    person to get managed members for
+     * @param person person to get managed members for
      * @return all managed and active members for the person
      */
     List<Person> getManagedActiveMembersOfPerson(Person person);
@@ -182,7 +190,7 @@ public interface DepartmentService {
      * @param pageableSearchQuery searchQuery to restrict the result set
      * @return all managed and active members for the person
      */
-    Page<Person> getManagedMembersOfPersonAndDepartment(Person person, Integer departmentId, PageableSearchQuery pageableSearchQuery);
+    Page<Person> getManagedMembersOfPersonAndDepartment(Person person, Long departmentId, PageableSearchQuery pageableSearchQuery);
 
     /**
      * Check the role of the given person and return a {@link Page} of all managed and inactive {@link Person}s for the
@@ -194,7 +202,7 @@ public interface DepartmentService {
      * @param pageableSearchQuery search query containing pageable and an optional query for firstname/lastname
      * @return all managed and inactive members for the person
      */
-    Page<Person> getManagedInactiveMembersOfPersonAndDepartment(Person person, Integer departmentId, PageableSearchQuery pageableSearchQuery);
+    Page<Person> getManagedInactiveMembersOfPersonAndDepartment(Person person, Long departmentId, PageableSearchQuery pageableSearchQuery);
 
     /**
      * Get all distinct managed members of the department head.
@@ -265,7 +273,7 @@ public interface DepartmentService {
      * {@linkplain org.synyx.urlaubsverwaltung.person.Role#DEPARTMENT_HEAD} or {@linkplain org.synyx.urlaubsverwaltung.person.Role#SECOND_STAGE_AUTHORITY}
      * of the other person.
      *
-     * @param person a person
+     * @param person      a person
      * @param otherPerson another person
      * @return {@code true} when the persons have a department match, {@code false} otherwise
      */

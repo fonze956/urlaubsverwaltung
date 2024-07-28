@@ -27,13 +27,17 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-import static java.util.stream.Collectors.toList;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.synyx.urlaubsverwaltung.security.SecurityRules.IS_BOSS_OR_OFFICE;
-import static org.synyx.urlaubsverwaltung.security.SecurityRules.IS_OFFICE;
 
+@Tag(
+    name = "public holidays",
+    description = """
+        Public Holidays: Returns information about public holidays
+        """
+)
 @RestControllerAdviceMarker
-@Tag(name = "public holidays", description = "Public Holidays: Get information about public holidays")
 @RestController
 @RequestMapping("/api")
 public class PublicHolidayApiController {
@@ -46,7 +50,6 @@ public class PublicHolidayApiController {
     @Autowired
     public PublicHolidayApiController(PublicHolidaysService publicHolidaysService, PersonService personService,
                                       WorkingTimeService workingTimeService, SettingsService settingsService) {
-
         this.publicHolidaysService = publicHolidaysService;
         this.personService = personService;
         this.workingTimeService = workingTimeService;
@@ -55,11 +58,15 @@ public class PublicHolidayApiController {
 
     @Operation(
         summary = "Get all public holidays for a certain period",
-        description = "Get all public holidays for a certain period. "
-            + "Information only reachable for users with role office."
+        description = """
+            Returns all global public holidays for a certain period based on the global public holiday regulations
+
+            Needed basic authorities:
+            * user
+            """
     )
-    @GetMapping("public-holidays")
-    @PreAuthorize(IS_OFFICE)
+    @GetMapping(path = "public-holidays", produces = APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('USER')")
     public PublicHolidaysDto getPublicHolidays(
         @Parameter(description = "Start date with pattern yyyy-MM-dd")
         @RequestParam("from")
@@ -75,15 +82,26 @@ public class PublicHolidayApiController {
         final WorkingTimeSettings workingTimeSettings = settingsService.getSettings().getWorkingTimeSettings();
         final FederalState federalState = workingTimeSettings.getFederalState();
 
-        final List<PublicHolidayDto> publicHolidays = getPublicHolidays(startDate, endDate, federalState, workingTimeSettings);
+        final List<PublicHolidayDto> publicHolidays = getPublicHolidays(startDate, endDate, federalState);
         return new PublicHolidaysDto(publicHolidays);
     }
 
     @Operation(
-        summary = "Get all public holidays for a certain period", description = "Get all public holidays for a certain period. "
-        + "Information only reachable for users with role office and for own public holidays."
+        summary = "Returns all public holidays for a certain period and given person",
+        description = """
+            Returns all public holidays for a certain period based on the specific public holiday regulations of the given person
+
+            Needed basic authorities:
+            * user
+
+            Needed additional authorities:
+            * user                   - if the requested public holidays of the person id is the one of the authenticated user
+            * department_head        - if the requested public holidays of the person id is a managed person of the department head and not of the authenticated user
+            * second_stage_authority - if the requested public holidays of the person id is a managed person of the second stage authority and not of the authenticated user
+            * boss or office         - if the requested public holidays of the person id is any id but not of the authenticated user
+            """
     )
-    @GetMapping("/persons/{personId}/public-holidays")
+    @GetMapping(path = "/persons/{personId}/public-holidays", produces = APPLICATION_JSON_VALUE)
     @PreAuthorize(IS_BOSS_OR_OFFICE +
         " or @userApiMethodSecurity.isSamePersonId(authentication, #personId)" +
         " or @userApiMethodSecurity.isInDepartmentOfDepartmentHead(authentication, #personId)" +
@@ -91,7 +109,7 @@ public class PublicHolidayApiController {
     public PublicHolidaysDto personsPublicHolidays(
         @Parameter(description = "ID of the person to get the public holidays for.")
         @PathVariable("personId")
-        Integer personId,
+        Long personId,
         @Parameter(description = "Start date with pattern yyyy-MM-dd")
         @RequestParam("from")
         @DateTimeFormat(iso = ISO.DATE)
@@ -111,22 +129,20 @@ public class PublicHolidayApiController {
         final Person person = optionalPerson.get();
         final DateRange dateRange = new DateRange(startDate, endDate);
 
-        final WorkingTimeSettings workingTimeSettings = settingsService.getSettings().getWorkingTimeSettings();
-
         final List<PublicHolidayDto> publicHolidays = workingTimeService.getFederalStatesByPersonAndDateRange(person, dateRange)
             .entrySet().stream()
-            .map(entry -> getPublicHolidays(entry.getKey().getStartDate(), entry.getKey().getEndDate(), entry.getValue(), workingTimeSettings))
+            .map(entry -> getPublicHolidays(entry.getKey().startDate(), entry.getKey().endDate(), entry.getValue()))
             .flatMap(List::stream)
             .sorted(Comparator.comparing(PublicHolidayDto::getDate))
-            .collect(toList());
+            .toList();
 
         return new PublicHolidaysDto(publicHolidays);
     }
 
-    private List<PublicHolidayDto> getPublicHolidays(LocalDate startDate, LocalDate endDate, FederalState federalState, WorkingTimeSettings workingTimeSettings) {
-        return publicHolidaysService.getPublicHolidays(startDate, endDate, federalState, workingTimeSettings).stream()
+    private List<PublicHolidayDto> getPublicHolidays(LocalDate startDate, LocalDate endDate, FederalState federalState) {
+        return publicHolidaysService.getPublicHolidays(startDate, endDate, federalState).stream()
             .map(this::mapPublicHolidayToDto)
-            .collect(toList());
+            .toList();
     }
 
     private void checkValidPeriod(LocalDate startDate, LocalDate endDate) {
@@ -136,6 +152,6 @@ public class PublicHolidayApiController {
     }
 
     private PublicHolidayDto mapPublicHolidayToDto(PublicHoliday publicHoliday) {
-        return new PublicHolidayDto(publicHoliday, publicHoliday.getDayLength().getDuration(), publicHoliday.getDayLength().name());
+        return new PublicHolidayDto(publicHoliday, publicHoliday.dayLength().getDuration(), publicHoliday.dayLength().name());
     }
 }

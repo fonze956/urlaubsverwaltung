@@ -23,6 +23,7 @@ import org.synyx.urlaubsverwaltung.application.comment.ApplicationComment;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentForm;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentService;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentValidator;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
@@ -38,6 +39,7 @@ import java.time.LocalDate;
 import java.time.Year;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -115,10 +117,11 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
     }
 
     @GetMapping("/{applicationId}")
-    public String showApplicationDetail(@PathVariable("applicationId") Integer applicationId,
+    public String showApplicationDetail(@PathVariable("applicationId") Long applicationId,
                                         @RequestParam(value = "year", required = false) Integer requestedYear,
                                         @RequestParam(value = "action", required = false) String action,
-                                        @RequestParam(value = "shortcut", required = false) boolean shortcut, Model model)
+                                        @RequestParam(value = "shortcut", required = false) boolean shortcut,
+                                        Model model, Locale locale)
         throws UnknownApplicationForLeaveException {
 
         final Application application = applicationService.getApplicationById(applicationId)
@@ -133,7 +136,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
         }
 
         final int year = requestedYear == null ? application.getEndDate().getYear() : requestedYear;
-        prepareDetailView(application, year, action, shortcut, model, signedInUser);
+        prepareDetailView(application, year, action, shortcut, model, locale, signedInUser);
 
         return "application/application-detail";
     }
@@ -143,7 +146,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
      */
     @PreAuthorize(IS_BOSS_OR_DEPARTMENT_HEAD_OR_SECOND_STAGE_AUTHORITY)
     @PostMapping("/{applicationId}/allow")
-    public String allowApplication(@PathVariable("applicationId") Integer applicationId,
+    public String allowApplication(@PathVariable("applicationId") Long applicationId,
                                    @ModelAttribute("comment") ApplicationCommentForm comment, Errors errors,
                                    @RequestParam(value = "redirect", required = false) String redirectUrl,
                                    RedirectAttributes redirectAttributes) throws UnknownApplicationForLeaveException {
@@ -185,7 +188,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
             redirectAttributes.addFlashAttribute("temporaryAllowSuccess", true);
         }
 
-        if (redirectUrl != null && redirectUrl.equals("/web/application/")) {
+        if (redirectUrl != null && redirectUrl.equals("/web/application")) {
             return "redirect:" + redirectUrl;
         }
 
@@ -198,7 +201,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
      */
     @PreAuthorize(IS_PRIVILEGED_USER)
     @PostMapping("/{applicationId}/refer")
-    public String referApplication(@PathVariable("applicationId") Integer applicationId,
+    public String referApplication(@PathVariable("applicationId") Long applicationId,
                                    @ModelAttribute("referredPerson") ReferredPerson referredPerson, RedirectAttributes redirectAttributes)
         throws UnknownApplicationForLeaveException, UnknownPersonException {
 
@@ -228,7 +231,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_BOSS_OR_DEPARTMENT_HEAD_OR_SECOND_STAGE_AUTHORITY)
     @PostMapping("/{applicationId}/reject")
-    public String rejectApplication(@PathVariable("applicationId") Integer applicationId,
+    public String rejectApplication(@PathVariable("applicationId") Long applicationId,
                                     @ModelAttribute("comment") ApplicationCommentForm comment, Errors errors,
                                     @RequestParam(value = "redirect", required = false) String redirectUrl,
                                     RedirectAttributes redirectAttributes) throws UnknownApplicationForLeaveException {
@@ -263,7 +266,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
         applicationInteractionService.reject(application, signedInUser, Optional.ofNullable(comment.getText()));
         redirectAttributes.addFlashAttribute("rejectSuccess", true);
 
-        if (redirectUrl != null && redirectUrl.equals("/web/application/")) {
+        if (redirectUrl != null && redirectUrl.equals("/web/application")) {
             return "redirect:" + redirectUrl;
         }
 
@@ -276,7 +279,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
      * Cancelling an application for leave on behalf for someone is allowed only for Office.
      */
     @PostMapping("/{applicationId}/cancel")
-    public String cancelApplication(@PathVariable("applicationId") Integer applicationId,
+    public String cancelApplication(@PathVariable("applicationId") Long applicationId,
                                     @ModelAttribute("comment") ApplicationCommentForm comment, Errors errors,
                                     RedirectAttributes redirectAttributes)
         throws UnknownApplicationForLeaveException {
@@ -290,19 +293,19 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
         final boolean isDepartmentHead = departmentService.isDepartmentHeadAllowedToManagePerson(signedInUser, person);
         final boolean isSecondStageAuthority = departmentService.isSecondStageAuthorityAllowedToManagePerson(signedInUser, person);
 
-        final boolean requiresApproval = application.getVacationType().isRequiresApproval();
+        final boolean requiresApprovalToCancel = application.getVacationType().isRequiresApprovalToCancel();
 
-        final boolean allowedToRevokeApplication = isAllowedToRevokeApplication(application, signedInUser, requiresApproval);
+        final boolean allowedToRevokeApplication = isAllowedToRevokeApplication(application, signedInUser, requiresApprovalToCancel);
         final boolean allowedToCancelApplication = isAllowedToCancelApplication(application, signedInUser, isDepartmentHead, isSecondStageAuthority);
-        final boolean allowedToCancelDirectlyApplication = isAllowedToCancelDirectlyApplication(application, signedInUser, isDepartmentHead, isSecondStageAuthority, requiresApproval);
-        final boolean allowedToStartCancellationRequest = isAllowedToStartCancellationRequest(application, signedInUser, isDepartmentHead, isSecondStageAuthority, requiresApproval);
+        final boolean allowedToCancelDirectlyApplication = isAllowedToCancelDirectlyApplication(application, signedInUser, isDepartmentHead, isSecondStageAuthority, requiresApprovalToCancel);
+        final boolean allowedToStartCancellationRequest = isAllowedToStartCancellationRequest(application, signedInUser, isDepartmentHead, isSecondStageAuthority, requiresApprovalToCancel);
         if (!(allowedToRevokeApplication || allowedToCancelApplication || allowedToCancelDirectlyApplication || allowedToStartCancellationRequest)) {
             throw new AccessDeniedException(format("User '%s' has not the correct permissions to cancel or revoke application " +
                 "for leave of user '%s'", signedInUser.getId(), application.getPerson().getId()));
         }
 
-        // user can revoke their own applications, so the comment is NOT mandatory
-        final boolean isCommentMandatory = !signedInUser.equals(application.getPerson());
+        // comment is mandatory if cancel for another user or cancellation request of own
+        final boolean isCommentMandatory = allowedToStartCancellationRequest || !signedInUser.equals(application.getPerson());
         comment.setMandatory(isCommentMandatory);
 
         commentValidator.validate(comment, errors);
@@ -311,7 +314,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
             return REDIRECT_WEB_APPLICATION + applicationId + "?action=cancel";
         }
 
-        if (requiresApproval) {
+        if (requiresApprovalToCancel) {
             applicationInteractionService.cancel(application, signedInUser, Optional.ofNullable(comment.getText()));
         } else {
             applicationInteractionService.directCancel(application, signedInUser, Optional.ofNullable(comment.getText()));
@@ -323,7 +326,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
      * Cancel the cancellation request of an application for leave.
      */
     @PostMapping("/{applicationId}/decline-cancellation-request")
-    public String declineCancellationRequestApplication(@PathVariable("applicationId") Integer applicationId,
+    public String declineCancellationRequestApplication(@PathVariable("applicationId") Long applicationId,
                                                         @ModelAttribute("comment") ApplicationCommentForm comment, Errors errors,
                                                         RedirectAttributes redirectAttributes)
         throws UnknownApplicationForLeaveException {
@@ -358,7 +361,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
      * Remind the bosses about the decision of an application for leave.
      */
     @PostMapping("/{applicationId}/remind")
-    public String remindBoss(@PathVariable("applicationId") Integer applicationId,
+    public String remindBoss(@PathVariable("applicationId") Long applicationId,
                              RedirectAttributes redirectAttributes) throws UnknownApplicationForLeaveException {
 
         final Application application = applicationService.getApplicationById(applicationId)
@@ -387,7 +390,7 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
         return REDIRECT_WEB_APPLICATION + applicationId;
     }
 
-    private void prepareDetailView(Application application, int year, String action, boolean shortcut, Model model, Person signedInUser) {
+    private void prepareDetailView(Application application, int year, String action, boolean shortcut, Model model, Locale locale, Person signedInUser) {
 
         // signed in user
         model.addAttribute("signedInUser", signedInUser);
@@ -399,21 +402,20 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
         final List<ApplicationComment> comments = commentService.getCommentsByApplication(application);
         model.addAttribute("comment", new ApplicationCommentForm());
         model.addAttribute("comments", comments);
-        model.addAttribute("lastComment", comments.get(comments.size() - 1));
+        model.addAttribute("lastComment", comments.getLast());
 
         // APPLICATION FOR LEAVE
-        model.addAttribute("app", new ApplicationForLeave(application, workDaysCountService));
+        final ApplicationForLeave applicationForLeave = new ApplicationForLeave(application, workDaysCountService);
+        model.addAttribute("app", applicationForLeaveDetailDto(applicationForLeave, locale));
 
         final Map<DateRange, WorkingTime> workingTime = workingTimeService.getWorkingTimesByPersonAndDateRange(
                 application.getPerson(), new DateRange(application.getStartDate(), application.getEndDate())).entrySet().stream()
-            .sorted(Map.Entry.comparingByKey(comparing(DateRange::getStartDate)))
+            .sorted(Map.Entry.comparingByKey(comparing(DateRange::startDate)))
             .collect(toMap(Map.Entry::getKey, Map.Entry::getValue, (oldValue, newValue) -> newValue, LinkedHashMap::new));
         model.addAttribute("dateRangeWorkingTimes", workingTime);
 
         // DEPARTMENT APPLICATIONS FOR LEAVE
-        final List<Application> departmentApplications =
-            departmentService.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(application.getPerson(),
-                application.getStartDate(), application.getEndDate());
+        final List<Application> departmentApplications = departmentService.getApplicationsFromColleaguesOf(application.getPerson(), application.getStartDate(), application.getEndDate());
         model.addAttribute("departmentApplications", departmentApplications);
 
         // HOLIDAY ACCOUNT
@@ -439,17 +441,17 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
         // Signed in person is allowed to manage
         final boolean isDepartmentHeadOfPerson = departmentService.isDepartmentHeadAllowedToManagePerson(signedInUser, application.getPerson());
         final boolean isSecondStageAuthorityOfPerson = departmentService.isSecondStageAuthorityAllowedToManagePerson(signedInUser, application.getPerson());
-        final boolean requiresApproval = application.getVacationType().isRequiresApproval();
+        final boolean requiresApprovalToCancel = application.getVacationType().isRequiresApprovalToCancel();
 
         model.addAttribute("isAllowedToAllowWaitingApplication", isAllowedToAllowWaitingApplication(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson));
         model.addAttribute("isAllowedToAllowTemporaryAllowedApplication", isAllowedToAllowTemporaryAllowedApplication(application, signedInUser, isSecondStageAuthorityOfPerson));
 
         model.addAttribute("isAllowedToRejectApplication", isAllowedToRejectApplication(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson));
 
-        model.addAttribute("isAllowedToRevokeApplication", isAllowedToRevokeApplication(application, signedInUser, requiresApproval));
+        model.addAttribute("isAllowedToRevokeApplication", isAllowedToRevokeApplication(application, signedInUser, requiresApprovalToCancel));
         model.addAttribute("isAllowedToCancelApplication", isAllowedToCancelApplication(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson));
-        model.addAttribute("isAllowedToCancelDirectlyApplication", isAllowedToCancelDirectlyApplication(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson, requiresApproval));
-        model.addAttribute("isAllowedToStartCancellationRequest", isAllowedToStartCancellationRequest(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson, requiresApproval));
+        model.addAttribute("isAllowedToCancelDirectlyApplication", isAllowedToCancelDirectlyApplication(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson, requiresApprovalToCancel));
+        model.addAttribute("isAllowedToStartCancellationRequest", isAllowedToStartCancellationRequest(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson, requiresApprovalToCancel));
 
         model.addAttribute("isAllowedToDeclineCancellationRequest", isAllowedToDeclineCancellationRequest(application, signedInUser, isDepartmentHeadOfPerson, isSecondStageAuthorityOfPerson));
 
@@ -481,5 +483,40 @@ class ApplicationForLeaveDetailsViewController implements HasLaunchpad {
             .filter(not(isEqual(signedInUser)))
             .filter(person -> person.hasRole(BOSS) || person.hasRole(SECOND_STAGE_AUTHORITY) || (person.hasRole(DEPARTMENT_HEAD) && application.hasStatus(WAITING)))
             .collect(toList());
+    }
+
+    private ApplicationForLeaveDetailDto applicationForLeaveDetailDto(ApplicationForLeave applicationForLeave, Locale locale) {
+        final ApplicationForLeaveDetailDto dto = new ApplicationForLeaveDetailDto();
+        dto.setId(applicationForLeave.getId());
+        dto.setPerson(applicationForLeave.getPerson());
+        dto.setStatus(applicationForLeave.getStatus());
+        dto.setVacationType(applicationForLeaveDetailVacationTypeDto(applicationForLeave.getVacationType(), locale));
+        dto.setApplicationDate(applicationForLeave.getApplicationDate());
+        dto.setStartDate(applicationForLeave.getStartDate());
+        dto.setEndDate(applicationForLeave.getEndDate());
+        dto.setStartTime(applicationForLeave.getStartTime());
+        dto.setEndTime(applicationForLeave.getEndTime());
+        dto.setWeekDayOfStartDate(applicationForLeave.getWeekDayOfStartDate());
+        dto.setWeekDayOfEndDate(applicationForLeave.getWeekDayOfEndDate());
+        dto.setDayLength(applicationForLeave.getDayLength());
+        dto.setWorkDays(applicationForLeave.getWorkDays());
+        dto.setHours(applicationForLeave.getHours());
+        dto.setEditedDate(applicationForLeave.getEditedDate());
+        dto.setCancelDate(applicationForLeave.getCancelDate());
+        dto.setTwoStageApproval(applicationForLeave.isTwoStageApproval());
+        dto.setReason(applicationForLeave.getReason());
+        dto.setHolidayReplacements(applicationForLeave.getHolidayReplacements());
+        dto.setTeamInformed(applicationForLeave.isTeamInformed());
+        dto.setAddress(applicationForLeave.getAddress());
+        return dto;
+    }
+
+    private ApplicationForLeaveDetailVacationTypeDto applicationForLeaveDetailVacationTypeDto(VacationType<?> vacationType, Locale locale) {
+        return new ApplicationForLeaveDetailVacationTypeDto(
+            vacationType.getLabel(locale),
+            vacationType.getCategory(),
+            vacationType.getColor(),
+            vacationType.isRequiresApprovalToCancel()
+        );
     }
 }

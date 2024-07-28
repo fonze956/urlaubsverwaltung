@@ -1,6 +1,7 @@
 package org.synyx.urlaubsverwaltung.person.basedata;
 
 import de.focus_shift.launchpad.api.HasLaunchpad;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
@@ -16,8 +17,6 @@ import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonId;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.person.UnknownPersonException;
-
-import javax.validation.Valid;
 
 import static org.synyx.urlaubsverwaltung.person.basedata.PersonBasedataDtoMapper.mapToPersonBasedata;
 import static org.synyx.urlaubsverwaltung.person.basedata.PersonBasedataDtoMapper.mapToPersonBasedataDto;
@@ -38,7 +37,7 @@ public class PersonBasedataViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @GetMapping("/person/{personId}/basedata")
-    public String showPersonBasedata(@PathVariable("personId") Integer personId, Model model) throws UnknownPersonException {
+    public String showPersonBasedata(@PathVariable("personId") Long personId, Model model) throws UnknownPersonException {
 
         final Person person = personService.getPersonByID(personId).orElseThrow(() -> new UnknownPersonException(personId));
         final PersonBasedata personBasedata = personBasedataService.getBasedataByPersonId(personId)
@@ -51,7 +50,7 @@ public class PersonBasedataViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @PostMapping("/person/{personId}/basedata")
-    public String editPersonBasedata(@PathVariable("personId") Integer personId,
+    public String editPersonBasedata(@PathVariable("personId") Long personId,
                                      @Valid @ModelAttribute("personBasedata") PersonBasedataDto basedataDto, Errors errors, Model model, RedirectAttributes redirectAttributes) {
 
         if (errors.hasErrors()) {

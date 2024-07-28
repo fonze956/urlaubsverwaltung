@@ -45,7 +45,7 @@ class AccountTest {
     @Test
     void toStringTest() {
         final Person person = new Person("Theo", "Theo", "Theo", "Theo");
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER));
 
         final LocalDate validFrom = LocalDate.of(2014, JANUARY, 1);
@@ -55,7 +55,7 @@ class AccountTest {
 
         final String accountToString = account.toString();
         assertThat(accountToString).isEqualTo("Account{id=null, person=Person{id='10'}, validFrom=2014-01-01, " +
-            "validTo=2014-12-31, doRemainingVacationDaysExpireLocally=true, doRemainingVacationDaysExpireGlobally=false, expiryDate=2014-04-01, " +
+            "validTo=2014-12-31, doRemainingVacationDaysExpireLocally=true, doRemainingVacationDaysExpireGlobally=false, expiryDateLocally=2014-04-01, expiryDateGlobally=null, " +
             "expiryNotificationSentDate=null, annualVacationDays=10, actualVacationDays=null, " +
             "remainingVacationDays=10, remainingVacationDaysNotExpiring=10}");
     }
@@ -63,13 +63,13 @@ class AccountTest {
     @Test
     void equals() {
         final Account accountOne = new Account();
-        accountOne.setId(1);
+        accountOne.setId(1L);
 
         final Account accountOneOne = new Account();
-        accountOneOne.setId(1);
+        accountOneOne.setId(1L);
 
         final Account accountTwo = new Account();
-        accountTwo.setId(2);
+        accountTwo.setId(2L);
 
         assertThat(accountOne)
             .isEqualTo(accountOne)
@@ -82,7 +82,7 @@ class AccountTest {
     @Test
     void hashCodeTest() {
         final Account accountOne = new Account();
-        accountOne.setId(1);
+        accountOne.setId(1L);
 
         assertThat(accountOne.hashCode()).isEqualTo(32);
     }

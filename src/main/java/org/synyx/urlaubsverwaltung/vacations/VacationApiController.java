@@ -16,25 +16,28 @@ import org.springframework.web.server.ResponseStatusException;
 import org.synyx.urlaubsverwaltung.api.RestControllerAdviceMarker;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
-import org.synyx.urlaubsverwaltung.department.Department;
+import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 
-import static java.util.stream.Collectors.toList;
+import static org.springframework.hateoas.MediaTypes.HAL_JSON_VALUE;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
+import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.synyx.urlaubsverwaltung.security.SecurityRules.IS_BOSS_OR_OFFICE;
 
+@Tag(
+    name = "vacations",
+    description = """
+        Vacations: Returns all vacations for a certain period
+        """
+)
 @RestControllerAdviceMarker
-@Tag(name = "vacations", description = "Vacations: Get all vacations for a certain period")
 @RestController
-@RequestMapping("/api/persons/{id}/vacations")
+@RequestMapping("/api/persons/{personId}/vacations")
 public class VacationApiController {
 
     public static final String VACATIONS = "vacations";
@@ -51,20 +54,29 @@ public class VacationApiController {
     }
 
     @Operation(
-        deprecated = true,
-        summary = "Get all allowed vacations for a person and a certain period of time",
-        description = "Get all allowed vacations for a person and a certain period of time. "
-            + "Information only reachable for users with role office and for your own data."
+        summary = "Returns all active vacations for a person and a certain period of time",
+        description = """
+            Get all active vacations for a person and a certain period of time.
+
+            Needed basic authorities:
+            * user
+
+            Needed additional authorities:
+            * user                   - if the requested vacations of the person id is the one of the authenticated user
+            * department_head        - if the requested vacations of the person id is a managed person of the department head and not of the authenticated user
+            * second_stage_authority - if the requested vacations of the person id is a managed person of the second stage authority and not of the authenticated user
+            * boss or office         - if the requested vacations of the person id is any id but not of the authenticated user
+            """
     )
-    @GetMapping
+    @GetMapping(produces = {APPLICATION_JSON_VALUE, HAL_JSON_VALUE})
     @PreAuthorize(IS_BOSS_OR_OFFICE +
         " or @userApiMethodSecurity.isSamePersonId(authentication, #personId)" +
         " or @userApiMethodSecurity.isInDepartmentOfDepartmentHead(authentication, #personId)" +
         " or @userApiMethodSecurity.isInDepartmentOfSecondStageAuthority(authentication, #personId)")
     public VacationsDto getVacations(
         @Parameter(description = "ID of the person")
-        @PathVariable("id")
-        Integer personId,
+        @PathVariable("personId")
+        Long personId,
         @Parameter(description = "end of interval to get vacations from (inclusive)")
         @RequestParam("from")
         @DateTimeFormat(iso = ISO.DATE)
@@ -72,35 +84,48 @@ public class VacationApiController {
         @Parameter(description = "end of interval to get vacations from (inclusive)")
         @RequestParam("to")
         @DateTimeFormat(iso = ISO.DATE)
-        LocalDate endDate) {
+        LocalDate endDate,
+        @Parameter(description = "List of the vacation status to return. Default are all active status - waiting, temporary_allowed, allowed, allowed_cancellation_requested")
+        @RequestParam(value = "status", required = false, defaultValue = "waiting, temporary_allowed, allowed, allowed_cancellation_requested")
+        List<String> applicationStatus) {
 
         if (startDate.isAfter(endDate)) {
             throw new ResponseStatusException(BAD_REQUEST, "Parameter 'from' must be before or equals to 'to' parameter");
         }
 
-        final Person person = getPerson(personId);
-        final List<Application> applications = new ArrayList<>();
-        applications.addAll(applicationService.getApplicationsForACertainPeriodAndPersonAndState(startDate, endDate, person, ALLOWED));
-        applications.addAll(applicationService.getApplicationsForACertainPeriodAndPersonAndState(startDate, endDate, person, ALLOWED_CANCELLATION_REQUESTED));
+        final List<ApplicationStatus> requestedApplicationStatus = toApplicationStatus(applicationStatus);
+        final List<Person> requestedPerson = List.of(getPerson(personId));
 
+        final List<Application> applications = applicationService.getForStatesAndPerson(requestedApplicationStatus, requestedPerson, startDate, endDate);
         return mapToVacationResponse(applications);
     }
 
     @Operation(
-        summary = "Get all allowed vacations for department members for the given person and the certain period",
-        description = "Get all allowed vacations for department members for the given person and the certain period. "
-            + "All the waiting and allowed vacations of the departments the person is assigned to, are fetched. "
-            + "Information only reachable for users with role office and for your own data."
+        hidden = true,
+        summary = "Get all active vacations for department members for the given person and the certain period",
+        description = """
+            Returns all active vacations for department members for the given person and the certain period.
+            All active vacations of the departments the person is assigned to, are fetched.
+
+            Needed basic authorities:
+            * user
+
+            Needed additional authorities:
+            * user                   - if the requested vacations of the person id is the one of the authenticated user
+            * department_head        - if the requested vacations of the person id is a managed person of the department head and not of the authenticated user
+            * second_stage_authority - if the requested vacations of the person id is a managed person of the second stage authority and not of the authenticated user
+            * boss or office         - if the requested vacations of the person id is any id but not of the authenticated user
+            """
     )
-    @GetMapping(params = "ofDepartmentMembers")
+    @GetMapping(params = "ofDepartmentMembers", produces = {APPLICATION_JSON_VALUE, HAL_JSON_VALUE})
     @PreAuthorize(IS_BOSS_OR_OFFICE +
         " or @userApiMethodSecurity.isSamePersonId(authentication, #personId)" +
         " or @userApiMethodSecurity.isInDepartmentOfDepartmentHead(authentication, #personId)" +
         " or @userApiMethodSecurity.isInDepartmentOfSecondStageAuthority(authentication, #personId)")
     public VacationsDto getVacationsOfOthersOrDepartmentColleagues(
         @Parameter(description = "ID of the person")
-        @PathVariable("id")
-        Integer personId,
+        @PathVariable("personId")
+        Long personId,
         @Parameter(description = "Start date with pattern yyyy-MM-dd")
         @RequestParam("from")
         @DateTimeFormat(iso = ISO.DATE)
@@ -117,28 +142,33 @@ public class VacationApiController {
             throw new ResponseStatusException(BAD_REQUEST, "Parameter 'from' must be before or equals to 'to' parameter");
         }
 
-        final Person person = getPerson(personId);
+        final Person requestedPerson = getPerson(personId);
 
-        final List<Application> applications = new ArrayList<>();
-        final List<Department> departments = departmentService.getAssignedDepartmentsOfMember(person);
-        if (departments.isEmpty()) {
-            applications.addAll(applicationService.getApplicationsForACertainPeriodAndState(startDate, endDate, ALLOWED));
-            applications.addAll(applicationService.getApplicationsForACertainPeriodAndState(startDate, endDate, ALLOWED_CANCELLATION_REQUESTED));
-
-        } else {
-            applications.addAll(departmentService.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(person, startDate, endDate));
-        }
-
-        return mapToVacationResponse(applications);
+        final List<Application> applicationsOfColleagues = departmentService.getApplicationsFromColleaguesOf(requestedPerson, startDate, endDate);
+        return mapToVacationResponse(applicationsOfColleagues);
     }
 
-    private Person getPerson(Integer personId) {
+    private Person getPerson(Long personId) {
         return personService.getPersonByID(personId)
             .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "No person found for id = " + personId));
     }
 
     private VacationsDto mapToVacationResponse(List<Application> applications) {
-        final List<VacationDto> vacationsDto = applications.stream().map(VacationDto::new).collect(toList());
-        return new VacationsDto(vacationsDto);
+        return new VacationsDto(applications.stream().map(VacationDto::new).toList());
+    }
+
+    private List<ApplicationStatus> toApplicationStatus(List<String> applicationStatus) {
+        if (applicationStatus.isEmpty()) {
+            return List.of();
+        }
+
+        try {
+            return applicationStatus.stream()
+                .map(String::toUpperCase)
+                .map(ApplicationStatus::valueOf)
+                .toList();
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(BAD_REQUEST, e.getMessage());
+        }
     }
 }

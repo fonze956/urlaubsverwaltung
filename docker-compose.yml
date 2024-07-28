@@ -1,17 +1,35 @@
-version: '3.8'
 services:
-  mariadb:
-    image: mariadb:10.6.11
-    ports:
-      - '3308:3306'
+  postgres:
+    image: postgres:15.3-alpine
     environment:
-      - MYSQL_DATABASE=urlaubsverwaltung
-      - MYSQL_USER=urlaubsverwaltung
-      - MYSQL_PASSWORD=urlaubsverwaltung
-      - MYSQL_RANDOM_ROOT_PASSWORD=yes
-    command: ['mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
+      POSTGRES_DB: ${POSTGRES_DB:-urlaubsverwaltung}
+      POSTGRES_USER: ${POSTGRES_USER:-urlaubsverwaltung}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-urlaubsverwaltung}
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 3s
+      timeout: 1s
+      retries: 5
+
   mailhog:
     image: mailhog/mailhog:v1.0.1
     ports:
       - '1025:1025'
       - '8025:8025'
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: '8090'
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_CACHE: 'local'
+    ports:
+      - '8090:8090'
+    volumes:
+      - ./docker/keycloak/export:/opt/keycloak/data/import

@@ -27,7 +27,7 @@ class CalendarAccessibleService {
             return false;
         }
 
-        return companyCalendarAccessibleList.get(0).isAccessible();
+        return companyCalendarAccessibleList.getFirst().isAccessible();
     }
 
     void enableCompanyCalendar() {
@@ -46,11 +46,10 @@ class CalendarAccessibleService {
         final List<CompanyCalendarAccessible> companyCalendarAccessibleList = companyCalendarAccessibleRepository.findAll();
         if (companyCalendarAccessibleList.isEmpty()) {
             companyCalendarAccessible = new CompanyCalendarAccessible();
-            companyCalendarAccessible.setAccessible(isCompanyCalendarAccessible);
         } else {
-            companyCalendarAccessible = companyCalendarAccessibleList.get(0);
-            companyCalendarAccessible.setAccessible(isCompanyCalendarAccessible);
+            companyCalendarAccessible = companyCalendarAccessibleList.getFirst();
         }
+        companyCalendarAccessible.setAccessible(isCompanyCalendarAccessible);
 
         companyCalendarAccessibleRepository.save(companyCalendarAccessible);
     }

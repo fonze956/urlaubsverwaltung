@@ -1,8 +1,9 @@
 package org.synyx.urlaubsverwaltung.notification;
 
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.util.Objects;
 
 @Entity
@@ -10,14 +11,14 @@ import java.util.Objects;
 class UserNotificationSettingsEntity {
 
     @Id
-    private Integer personId;
+    private Long personId;
     private boolean restrictToDepartments;
 
-    public Integer getPersonId() {
+    public Long getPersonId() {
         return personId;
     }
 
-    public void setPersonId(Integer personId) {
+    public void setPersonId(Long personId) {
         this.personId = personId;
     }
 

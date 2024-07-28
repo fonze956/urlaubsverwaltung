@@ -47,7 +47,10 @@ public class AccountViewController implements HasLaunchpad {
     private final Clock clock;
 
     @Autowired
-    public AccountViewController(PersonService personService, AccountService accountService, AccountInteractionService accountInteractionService, VacationTypeViewModelService vacationTypeViewModelService, AccountFormValidator validator, Clock clock) {
+    AccountViewController(PersonService personService, AccountService accountService,
+                          AccountInteractionService accountInteractionService,
+                          VacationTypeViewModelService vacationTypeViewModelService,
+                          AccountFormValidator validator, Clock clock) {
         this.personService = personService;
         this.accountService = accountService;
         this.accountInteractionService = accountInteractionService;
@@ -63,7 +66,7 @@ public class AccountViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @GetMapping("/person/{personId}/account")
-    public String editAccount(@PathVariable("personId") Integer personId,
+    public String editAccount(@PathVariable("personId") Long personId,
                               @RequestParam(value = "year", required = false) Integer year, Model model)
         throws UnknownPersonException {
 
@@ -88,7 +91,7 @@ public class AccountViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @PostMapping("/person/{personId}/account")
-    public String updateAccount(@PathVariable("personId") Integer personId,
+    public String updateAccount(@PathVariable("personId") Long personId,
                                 @ModelAttribute("account") AccountForm accountForm, Errors errors, Model model,
                                 RedirectAttributes redirectAttributes) throws UnknownPersonException {
 
@@ -112,7 +115,7 @@ public class AccountViewController implements HasLaunchpad {
         final Boolean doRemainingVacationDaysExpireLocally = accountForm.isOverrideVacationDaysExpire()
             ? accountForm.getDoRemainingVacationDaysExpireLocally()
             : null;
-        final LocalDate expiryDate = accountForm.getExpiryDate();
+        final LocalDate expiryDateLocally = accountForm.getExpiryDateLocally();
         final BigDecimal annualVacationDays = accountForm.getAnnualVacationDays();
         final BigDecimal actualVacationDays = accountForm.getActualVacationDays();
         final BigDecimal remainingVacationDays = accountForm.getRemainingVacationDays();
@@ -123,11 +126,11 @@ public class AccountViewController implements HasLaunchpad {
         final Optional<Account> account = accountService.getHolidaysAccount(validFrom.getYear(), person);
 
         if (account.isPresent()) {
-            accountInteractionService.editHolidaysAccount(account.get(), validFrom, validTo, doRemainingVacationDaysExpireLocally, expiryDate, annualVacationDays,
+            accountInteractionService.editHolidaysAccount(account.get(), validFrom, validTo, doRemainingVacationDaysExpireLocally, expiryDateLocally, annualVacationDays,
                 actualVacationDays, remainingVacationDays, remainingVacationDaysNotExpiring, comment);
         } else {
             accountInteractionService.updateOrCreateHolidaysAccount(person, validFrom, validTo, doRemainingVacationDaysExpireLocally,
-                expiryDate, annualVacationDays, actualVacationDays, remainingVacationDays, remainingVacationDaysNotExpiring, comment);
+                expiryDateLocally, annualVacationDays, actualVacationDays, remainingVacationDays, remainingVacationDaysNotExpiring, comment);
         }
 
         redirectAttributes.addFlashAttribute("updateSuccess", true);
@@ -145,12 +148,13 @@ public class AccountViewController implements HasLaunchpad {
 
         accountForm.setHolidaysAccountValidFrom(accountDraft.getValidFrom());
         accountForm.setHolidaysAccountValidTo(accountDraft.getValidTo());
-        accountForm.setExpiryDate(accountDraft.getExpiryDate());
+        accountForm.setExpiryDateLocally(accountDraft.getExpiryDateLocally());
+        accountForm.setExpiryDateGlobally(accountDraft.getExpiryDateGlobally());
         accountForm.setRemainingVacationDaysNotExpiring(accountDraft.getRemainingVacationDaysNotExpiring());
 
-        accountForm.setDoRemainingVacationDaysExpireLocally(accountDraft.getDoRemainingVacationDaysExpireLocally());
-        accountForm.setDoRemainingVacationDaysExpireGlobally(accountDraft.isDoRemainingVacationDaysExpireGlobally());
-        accountForm.setOverrideVacationDaysExpire(accountDraft.getDoRemainingVacationDaysExpireLocally() != null);
+        accountForm.setDoRemainingVacationDaysExpireLocally(accountDraft.doRemainingVacationDaysExpireLocally());
+        accountForm.setDoRemainingVacationDaysExpireGlobally(accountDraft.doRemainingVacationDaysExpireGlobally());
+        accountForm.setOverrideVacationDaysExpire(accountDraft.doRemainingVacationDaysExpireLocally() != null);
 
         return accountForm;
     }

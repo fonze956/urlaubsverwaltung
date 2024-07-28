@@ -2,6 +2,10 @@ package org.synyx.urlaubsverwaltung.person;
 
 import com.icegreen.greenmail.junit5.GreenMailExtension;
 import com.icegreen.greenmail.util.ServerSetupTest;
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,10 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.synyx.urlaubsverwaltung.TestContainersBase;
 import org.synyx.urlaubsverwaltung.person.web.PersonPermissionsRoleDto;
 
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.util.List;
 
@@ -28,8 +28,6 @@ import static org.synyx.urlaubsverwaltung.person.web.PersonPermissionsRoleDto.SE
 @Transactional
 class PersonMailServiceIT extends TestContainersBase {
 
-    private static final String EMAIL_LINE_BREAK = "\r\n";
-
     @RegisterExtension
     static final GreenMailExtension greenMail = new GreenMailExtension(ServerSetupTest.SMTP_IMAP);
 
@@ -42,7 +40,7 @@ class PersonMailServiceIT extends TestContainersBase {
     void ensureOfficeWithNotificationsGetMailNewPersonIsCreated() throws MessagingException, IOException {
 
         final Person createdPerson = new Person("user", "Müller", "Lieschen", "lieschen12@example.org");
-        createdPerson.setId(1);
+        createdPerson.setId(1L);
 
         final Person office = personService.create(
             "office",
@@ -65,14 +63,15 @@ class PersonMailServiceIT extends TestContainersBase {
         assertThat(new InternetAddress(office.getEmail())).isEqualTo(msg.getAllRecipients()[0]);
 
         // check content of email
-        assertThat(msg.getContent()).isEqualTo("Hallo Marlene Muster," + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "es wurde ein neuer Benutzer erstellt." + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "    Lieschen Müller" + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "Du kannst unter folgender Adresse die Einstellungen des Benutzers einsehen und anpassen:" + EMAIL_LINE_BREAK +
-            "https://localhost:8080/web/person/1"
+        assertThat(readPlainContent(msg)).isEqualTo("""
+            Hallo Marlene Muster,
+
+            es wurde ein neuer Benutzer erstellt.
+
+                Lieschen Müller
+
+            Du kannst unter folgender Adresse die Einstellungen des Benutzers einsehen und anpassen:
+            https://localhost:8080/web/person/1"""
         );
     }
 
@@ -102,16 +101,21 @@ class PersonMailServiceIT extends TestContainersBase {
         assertThat(new InternetAddress(person.getEmail())).isEqualTo(msg.getAllRecipients()[0]);
 
         // check content of email
-        assertThat(msg.getContent()).isEqualTo("Hallo Marlene Muster," + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "du hast folgende neue Berechtigungen erhalten:" + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "- Freigabe-Verantwortlicher" + EMAIL_LINE_BREAK +
-            "- Abteilungsleiter" + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "dadurch kannst du auch weitere E-Mail-Benachrichtigungen unter https://localhost:8080/web/person/" + person.getId() + "/notifications einrichten." + EMAIL_LINE_BREAK +
-            EMAIL_LINE_BREAK +
-            "Eine Übersicht deiner aktuellen Berechtigungen und E-Mail-Benachrichtigungen kannst du in deinem Konto unter https://localhost:8080/web/person/" + person.getId() + " einsehen."
+        assertThat(readPlainContent(msg)).isEqualTo("""
+            Hallo Marlene Muster,
+
+            du hast folgende neue Berechtigungen erhalten:
+
+            - Freigabe-Verantwortlicher
+            - Abteilungsleiter
+
+            dadurch kannst du auch weitere E-Mail-Benachrichtigungen unter https://localhost:8080/web/person/%s/notifications einrichten.
+
+            Eine Übersicht deiner aktuellen Berechtigungen und E-Mail-Benachrichtigungen kannst du in deinem Konto unter https://localhost:8080/web/person/%s einsehen.""".formatted(person.getId(), person.getId())
         );
+    }
+
+    private String readPlainContent(Message message) throws MessagingException, IOException {
+        return message.getContent().toString().replaceAll("\\r", "");
     }
 }

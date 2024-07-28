@@ -1,37 +1,72 @@
 package org.synyx.urlaubsverwaltung.ui.pages;
 
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.synyx.urlaubsverwaltung.ui.Page;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 
-public class SettingsPage implements Page {
+import java.util.Locale;
+import java.util.regex.Pattern;
 
-    private static final By WORKING_TIME_TAB_SELECTOR = By.cssSelector("[data-test-id=settings-tab-working-time]");
-    private static final By OVERTIME_ENABLED_SELECTOR = By.cssSelector("[data-test-id=setting-overtime-enabled]");
-    private static final By SAVE_BUTTON_SELECTOR = By.cssSelector("[data-test-id=settings-save-button]");
-    private static final By HALF_DAY_DISABLE_SELECTOR = By.cssSelector("[data-test-id=vacation-half-day-disable]");
+import static com.microsoft.playwright.options.LoadState.DOMCONTENTLOADED;
+import static com.microsoft.playwright.options.WaitForSelectorState.ATTACHED;
 
-    private final WebDriver driver;
+public class SettingsPage {
 
-    public SettingsPage(WebDriver driver) {
-        this.driver = driver;
-    }
+    private static final String WORKING_TIME_TAB_SELECTOR = "[data-test-id=settings-tab-working-time]";
+    private static final String ABSENCE_TYPES_TAB_SELECTOR = "[data-test-id=settings-tab-absence-types]";
+    private static final String OVERTIME_ENABLED_SELECTOR = "[data-test-id=setting-overtime-enabled]";
+    private static final String OVERTIME_DISABLED_SELECTOR = "[data-test-id=setting-overtime-disabled]";
+    private static final String SAVE_BUTTON_SELECTOR = "[data-test-id=settings-save-button]";
+    private static final String HALF_DAY_DISABLE_SELECTOR = "[data-test-id=vacation-half-day-disable]";
 
-    @Override
-    public boolean isVisible(WebDriver driver) {
-        return !driver.findElements(WORKING_TIME_TAB_SELECTOR).isEmpty();
+    private final Page page;
+
+    public SettingsPage(Page page) {
+        this.page = page;
     }
 
     public void clickWorkingTimeTab() {
-        driver.findElement(WORKING_TIME_TAB_SELECTOR).click();
+        page.waitForResponse(Response::ok, () -> page.locator(WORKING_TIME_TAB_SELECTOR).click());
+        page.waitForLoadState(DOMCONTENTLOADED);
+    }
+
+    public void clickAbsenceTypesTab() {
+        page.locator(ABSENCE_TYPES_TAB_SELECTOR).click();
+        page.waitForURL(Pattern.compile("/settings/absence-types$"));
     }
 
     public void enableOvertime() {
-        driver.findElement(OVERTIME_ENABLED_SELECTOR).click();
+        page.locator(OVERTIME_ENABLED_SELECTOR).click();
     }
 
-    public boolean overtimeEnabled() {
-        return driver.findElement(OVERTIME_ENABLED_SELECTOR).isSelected();
+    public void disableOvertime() {
+        page.locator(OVERTIME_DISABLED_SELECTOR).click();
+    }
+
+    public void addNewVacationType() {
+        page.locator("button[name=add-absence-type]").click();
+        page.locator("[data-test-id=vacation-type] .absence-type-card__label span:empty").waitFor(new Locator.WaitForOptions().setState(ATTACHED));
+    }
+
+    public Locator lastVacationType() {
+        return page.locator("[data-test-id=vacation-type]").last();
+    }
+
+    public void setVacationTypeLabel(Locator absenceTypeLocator, Locale locale, String value) {
+        final String selector = "[data-test-id=vacation-type-label-translation-%s]".formatted(locale.toString());
+        absenceTypeLocator.locator(selector).fill(value);
+    }
+
+    public Locator vacationTypeMissingTranslationError(Locator absencetypeLocator) {
+        return absencetypeLocator.locator("[data-test-id=vacation-type-missing-translation-error]");
+    }
+
+    public Locator vacationTypeUniqueTranslationError(Locator absencetypeLocator, Locale locale) {
+        return absencetypeLocator.locator("[data-test-id=vacation-type-unique-translation-error-%s]".formatted(locale));
+    }
+
+    public Locator vacationTypeStatusCheckbox(Locator absenceTypeLocator) {
+        return absenceTypeLocator.locator("[data-test-id=vacation-type-active]");
     }
 
     /**
@@ -39,10 +74,11 @@ public class SettingsPage implements Page {
      * You may have to add a wait yourself after calling this method.
      */
     public void saveSettings() {
-        driver.findElement(SAVE_BUTTON_SELECTOR).click();
+        page.waitForResponse(Response::ok, () -> page.locator(SAVE_BUTTON_SELECTOR).first().click());
+        page.waitForLoadState(DOMCONTENTLOADED);
     }
 
     public void clickDisableHalfDayAbsence() {
-        driver.findElement(HALF_DAY_DISABLE_SELECTOR).click();
+        page.locator(HALF_DAY_DISABLE_SELECTOR).click();
     }
 }

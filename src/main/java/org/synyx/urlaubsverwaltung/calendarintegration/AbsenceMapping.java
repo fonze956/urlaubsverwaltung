@@ -1,27 +1,31 @@
 package org.synyx.urlaubsverwaltung.calendarintegration;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Enumerated;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
+
 import java.util.Objects;
 
-import static javax.persistence.EnumType.STRING;
+import static jakarta.persistence.EnumType.STRING;
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 /**
  * Mapping object between absence (application for leave or sick note) and sync calendar event.
  */
-@Deprecated(since = "4.26.0", forRemoval = true)
 @Entity
 public class AbsenceMapping {
 
     @Id
-    @GeneratedValue
-    private Integer id;
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "absence_mapping_generator")
+    @SequenceGenerator(name = "absence_mapping_generator", sequenceName = "absence_mapping_id_seq")
+    private Long id;
 
     @Column(nullable = false)
-    private Integer absenceId;
+    private Long absenceId;
 
     @Enumerated(STRING)
     @Column(nullable = false)
@@ -34,25 +38,25 @@ public class AbsenceMapping {
         /* OK */
     }
 
-    public AbsenceMapping(Integer absenceId, AbsenceMappingType absenceMappingType, String eventId) {
+    AbsenceMapping(Long absenceId, AbsenceMappingType absenceMappingType, String eventId) {
         this.absenceId = absenceId;
         this.absenceMappingType = absenceMappingType;
         this.eventId = eventId;
     }
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
-    public Integer getAbsenceId() {
+    public Long getAbsenceId() {
         return absenceId;
     }
 
-    public void setAbsenceId(Integer absenceId) {
+    public void setAbsenceId(Long absenceId) {
         this.absenceId = absenceId;
     }
 

@@ -20,9 +20,8 @@ import org.synyx.urlaubsverwaltung.person.basedata.PersonBasedata;
 import org.synyx.urlaubsverwaltung.person.basedata.PersonBasedataService;
 import org.synyx.urlaubsverwaltung.settings.Settings;
 import org.synyx.urlaubsverwaltung.settings.SettingsService;
-import org.synyx.urlaubsverwaltung.workingtime.FederalState;
+import org.synyx.urlaubsverwaltung.sicknote.settings.SickNoteSettings;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeService;
-import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeSettings;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -47,7 +46,6 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.USER;
-import static org.synyx.urlaubsverwaltung.workingtime.FederalState.GERMANY_BADEN_WUERTTEMBERG;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -87,11 +85,11 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationIfSignedInUserIsNotAllowedToAccessPersonDataThrowsAccessDeniedException() {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(person, person)).thenReturn(false);
 
         assertThatThrownBy(() ->
@@ -102,13 +100,13 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationUsesGivenYear() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(person, person)).thenReturn(true);
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        userIsAllowedToSubmitSickNotes(false);
 
         perform(get("/web/person/1").param("year", "1985"))
             .andExpect(model().attribute("currentYear", Year.now().getValue()))
@@ -118,15 +116,16 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationShowsBasedata() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
-        final PersonBasedata personBasedata = new PersonBasedata(new PersonId(1), "42", "additional information");
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
+        final PersonBasedata personBasedata = new PersonBasedata(new PersonId(1L), "42", "additional information");
         when(personBasedataService.getBasedataByPersonId(1)).thenReturn(Optional.of(personBasedata));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(person, person)).thenReturn(true);
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+
+        userIsAllowedToSubmitSickNotes(false);
 
         perform(get("/web/person/1"))
             .andExpect(model().attribute("personBasedata", hasProperty("personnelNumber", is("42"))))
@@ -136,13 +135,14 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationUsesCurrentYearIfNoYearGiven() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(person, person)).thenReturn(true);
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+
+        userIsAllowedToSubmitSickNotes(false);
 
         final int currentYear = Year.now(clock).getValue();
 
@@ -154,13 +154,13 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationUsesAccountIfPresent() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(person, person)).thenReturn(true);
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        userIsAllowedToSubmitSickNotes(false);
 
         perform(get("/web/person/1"))
             .andExpect(model().attribute("account", nullValue()));
@@ -175,13 +175,13 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationUsesCorrectView() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(person, person)).thenReturn(true);
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        userIsAllowedToSubmitSickNotes(false);
 
         perform(get("/web/person/1"))
             .andExpect(view().name("person/person_detail"));
@@ -190,14 +190,14 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationOfficeCanEditPermissions() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         final Person office = new Person();
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
+        userIsAllowedToSubmitSickNotes(false);
         when(departmentService.isSignedInUserAllowedToAccessPersonData(office, person)).thenReturn(true);
 
         perform(get("/web/person/1"))
@@ -208,14 +208,14 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationOfficeCanEditDepartments() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         final Person office = new Person();
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
+        userIsAllowedToSubmitSickNotes(false);
         when(departmentService.isSignedInUserAllowedToAccessPersonData(office, person)).thenReturn(true);
 
         perform(get("/web/person/1"))
@@ -226,14 +226,14 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationOfficeCanEditAccounts() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         final Person office = new Person();
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
+        userIsAllowedToSubmitSickNotes(false);
         when(departmentService.isSignedInUserAllowedToAccessPersonData(office, person)).thenReturn(true);
 
         perform(get("/web/person/1"))
@@ -244,14 +244,14 @@ class PersonDetailsViewControllerTest {
     @Test
     void showPersonInformationOfficeCanEditWorkingtimes() throws Exception {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(singletonList(DEPARTMENT_HEAD));
 
         final Person office = new Person();
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
-        when(settingsService.getSettings()).thenReturn(settingsWithFederalState(GERMANY_BADEN_WUERTTEMBERG));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
+        userIsAllowedToSubmitSickNotes(false);
         when(departmentService.isSignedInUserAllowedToAccessPersonData(office, person)).thenReturn(true);
 
         perform(get("/web/person/1"))
@@ -266,19 +266,16 @@ class PersonDetailsViewControllerTest {
             .perform(builder);
     }
 
-    private static Settings settingsWithFederalState(FederalState federalState) {
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setFederalState(federalState);
-
-        final Settings settings = new Settings();
-        settings.setWorkingTimeSettings(workingTimeSettings);
-
-        return settings;
-    }
-
     private static Account accountForPerson(Person person) {
         final LocalDate expiryDate = LocalDate.now(clock).withMonth(APRIL.getValue()).with(firstDayOfMonth());
         return new Account(person, LocalDate.now(clock), LocalDate.now(clock), true, expiryDate, ONE, TEN, TEN, "");
+    }
+
+    private void userIsAllowedToSubmitSickNotes(boolean userIsAllowedToSubmit) {
+        final Settings settings = new Settings();
+        final SickNoteSettings sickNoteSettings = new SickNoteSettings();
+        sickNoteSettings.setUserIsAllowedToSubmitSickNotes(userIsAllowedToSubmit);
+        settings.setSickNoteSettings(sickNoteSettings);
+        when(settingsService.getSettings()).thenReturn(settings);
     }
 }

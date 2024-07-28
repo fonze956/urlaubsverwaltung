@@ -2,7 +2,7 @@ package org.synyx.urlaubsverwaltung.publicholiday;
 
 import java.math.BigDecimal;
 
-final class PublicHolidayDto {
+public final class PublicHolidayDto {
 
     private final String date;
     private final String description;
@@ -10,8 +10,8 @@ final class PublicHolidayDto {
     private final String absencePeriodName;
 
     PublicHolidayDto(PublicHoliday publicHoliday, BigDecimal dayLength, String absencePeriodName) {
-        this.date = publicHoliday.getDate().toString();
-        this.description = publicHoliday.getDescription();
+        this.date = publicHoliday.date().toString();
+        this.description = publicHoliday.description();
         this.dayLength = dayLength;
         this.absencePeriodName = absencePeriodName;
     }

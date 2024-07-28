@@ -1,14 +1,18 @@
 package org.synyx.urlaubsverwaltung.account;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.SequenceGenerator;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.ManyToOne;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Objects;
+
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 /**
  * This class describes how many vacation days and remaining vacation days a person has in which period (validFrom, validTo).
@@ -17,8 +21,10 @@ import java.util.Objects;
 public class AccountEntity {
 
     @Id
-    @GeneratedValue
-    private Integer id;
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "account_generator")
+    @SequenceGenerator(name = "account_generator", sequenceName = "account_id_seq")
+    private Long id;
 
     @ManyToOne
     private Person person;
@@ -59,11 +65,11 @@ public class AccountEntity {
         this.comment = comment;
     }
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

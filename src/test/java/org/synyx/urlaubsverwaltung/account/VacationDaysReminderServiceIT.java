@@ -1,6 +1,10 @@
 package org.synyx.urlaubsverwaltung.account;
 
 import com.icegreen.greenmail.junit5.GreenMailExtension;
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,10 +16,6 @@ import org.synyx.urlaubsverwaltung.mail.MailService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 
-import javax.mail.Message;
-import javax.mail.MessagingException;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
@@ -33,8 +33,6 @@ import static org.mockito.Mockito.when;
 @SpringBootTest(properties = {"spring.mail.port=3025", "spring.mail.host=localhost"})
 @Transactional
 class VacationDaysReminderServiceIT extends TestContainersBase {
-
-    private static final String EMAIL_LINE_BREAK = "\r\n";
 
     @RegisterExtension
     static final GreenMailExtension greenMail = new GreenMailExtension(SMTP_IMAP);
@@ -56,11 +54,11 @@ class VacationDaysReminderServiceIT extends TestContainersBase {
         final VacationDaysReminderService sut = new VacationDaysReminderService(personService, accountService, vacationDaysService, mailService, clock);
 
         final Person person = new Person("user", "Müller", "Lieschen", "lieschen@example.org");
-        person.setId(42);
+        person.setId(42L);
         when(personService.getActivePersons()).thenReturn(List.of(person));
 
         final Account account = new Account();
-        account.setExpiryDate(LocalDate.of(2022, 4, 1));
+        account.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         account.setDoRemainingVacationDaysExpireLocally(true);
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account));
         when(vacationDaysService.calculateTotalLeftVacationDays(account)).thenReturn(TEN);
@@ -76,12 +74,13 @@ class VacationDaysReminderServiceIT extends TestContainersBase {
         assertThat(new InternetAddress(person.getEmail())).isEqualTo(msg.getAllRecipients()[0]);
 
         // check content of email
-        final String content = (String) msg.getContent();
-        assertThat(content).isEqualTo("Hallo Lieschen Müller," + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "Du hast noch 10 Tage Urlaub für dieses Jahr offen, bitte denke daran, deinen Urlaub zu planen." + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "Mehr Informationen zu deinem Urlaubsanspruch findest du hier: https://localhost:8080/web/person/42/overview");
+        final String content = readPlainContent(msg);
+        assertThat(content).isEqualTo("""
+            Hallo Lieschen Müller,
+
+            Du hast noch 10 Tage Urlaub für dieses Jahr offen, bitte denke daran, deinen Urlaub zu planen.
+
+            Mehr Informationen zu deinem Urlaubsanspruch findest du hier: https://localhost:8080/web/person/42/overview""");
     }
 
     @Test
@@ -91,16 +90,16 @@ class VacationDaysReminderServiceIT extends TestContainersBase {
         final VacationDaysReminderService sut = new VacationDaysReminderService(personService, accountService, vacationDaysService, mailService, clock);
 
         final Person person = new Person("user", "Müller", "Lieschen", "lieschen@example.org");
-        person.setId(42);
+        person.setId(42L);
         when(personService.getActivePersons()).thenReturn(List.of(person));
 
         final Account account2022 = new Account();
-        account2022.setExpiryDate(LocalDate.of(2022,4,1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         account2022.setDoRemainingVacationDaysExpireLocally(true);
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         final Account account2023 = new Account();
-        account2023.setExpiryDate(LocalDate.of(2023, 4, 1));
+        account2023.setExpiryDateLocally(LocalDate.of(2023, 4, 1));
         account2023.setDoRemainingVacationDaysExpireLocally(true);
         when(accountService.getHolidaysAccount(2023, person)).thenReturn(Optional.of(account2023));
 
@@ -124,12 +123,13 @@ class VacationDaysReminderServiceIT extends TestContainersBase {
         assertThat(new InternetAddress(person.getEmail())).isEqualTo(msg.getAllRecipients()[0]);
 
         // check content of email
-        final String content = (String) msg.getContent();
-        assertThat(content).isEqualTo("Hallo Lieschen Müller," + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "Du hast noch 10 Tage Resturlaub aus dem Vorjahr, bitte denke daran den Urlaub bis zum 31.03.2022 zu nehmen." + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "Mehr Informationen zu deinem Urlaubsanspruch findest du hier: https://localhost:8080/web/person/42/overview");
+        final String content = readPlainContent(msg);
+        assertThat(content).isEqualTo("""
+            Hallo Lieschen Müller,
+
+            Du hast noch 10 Tage Resturlaub aus dem Vorjahr, bitte denke daran den Urlaub bis zum 31.03.2022 zu nehmen.
+
+            Mehr Informationen zu deinem Urlaubsanspruch findest du hier: https://localhost:8080/web/person/42/overview""");
     }
 
     @Test
@@ -139,16 +139,16 @@ class VacationDaysReminderServiceIT extends TestContainersBase {
         final VacationDaysReminderService sut = new VacationDaysReminderService(personService, accountService, vacationDaysService, mailService, clock);
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         when(personService.getActivePersons()).thenReturn(List.of(person));
 
         final Account account2022 = new Account();
-        account2022.setExpiryDate(LocalDate.of(2022,4,1));
+        account2022.setExpiryDateLocally(LocalDate.of(2022, 4, 1));
         account2022.setDoRemainingVacationDaysExpireLocally(true);
         when(accountService.getHolidaysAccount(2022, person)).thenReturn(Optional.of(account2022));
 
         final Account account2023 = new Account();
-        account2023.setExpiryDate(LocalDate.of(2023, 4, 1));
+        account2023.setExpiryDateLocally(LocalDate.of(2023, 4, 1));
         account2023.setDoRemainingVacationDaysExpireLocally(true);
         when(accountService.getHolidaysAccount(2023, person)).thenReturn(Optional.of(account2023));
 
@@ -173,13 +173,18 @@ class VacationDaysReminderServiceIT extends TestContainersBase {
         assertThat(new InternetAddress(person.getEmail())).isEqualTo(msg.getAllRecipients()[0]);
 
         // check content of email
-        assertThat(msg.getContent()).isEqualTo("Hallo Marlene Muster," + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "leider ist dein Resturlaub zum 01.04.2022 in Höhe von 10 Tagen verfallen." + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "Dein aktueller Urlaubsanspruch:" + EMAIL_LINE_BREAK +
-            "    10 Tage" + EMAIL_LINE_BREAK +
-            "" + EMAIL_LINE_BREAK +
-            "Mehr Informationen zu deinem Urlaubsanspruch findest du hier: https://localhost:8080/web/person/1/overview");
+        assertThat(readPlainContent(msg)).isEqualTo("""
+            Hallo Marlene Muster,
+
+            leider ist dein Resturlaub zum 01.04.2022 in Höhe von 10 Tagen verfallen.
+
+            Dein aktueller Urlaubsanspruch:
+                10 Tage
+
+            Mehr Informationen zu deinem Urlaubsanspruch findest du hier: https://localhost:8080/web/person/1/overview""");
+    }
+
+    private String readPlainContent(Message message) throws MessagingException, IOException {
+        return message.getContent().toString().replaceAll("\\r", "");
     }
 }

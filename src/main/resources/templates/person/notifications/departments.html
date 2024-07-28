@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
   <head>
     <title></title>
@@ -17,7 +17,7 @@
         th:if="${departmentsAvailable and not personAssignedToDepartments}"
         class="tw-flex tw-items-center tw-gap-1.5 tw-mb-8 tw-text-yellow-600 dark:tw-text-amber-300"
       >
-        <svg th:replace="icon/info::svg(className='tw-w-5 tw-h-5')"></svg>
+        <svg th:replace="~{icon/info::svg(className='tw-w-5 tw-h-5')}"></svg>
         <p class="tw-m-0">
           <th:block
             th:if="${userId eq personNotificationsDto.personId}"
@@ -41,6 +41,7 @@
       <input type="hidden" th:field="*{overtimeApplied.active}" />
       <input type="hidden" th:field="*{overtimeAppliedByManagement.active}" />
       <input type="hidden" th:field="*{personNewManagementAll.active}" />
+      <input type="hidden" th:field="*{ownSickNoteSubmittedCreatedEditedCancelled.active}" />
 
       <div class="list-selectable">
         <div
@@ -163,6 +164,32 @@
               ></li>
             </ul>
           </section>
+          <section
+            th:if="${
+                personNotificationsDto.sickNoteCreatedByManagementForManagement.visible ||
+                personNotificationsDto.sickNoteSubmittedByUserForManagement.visible ||
+                personNotificationsDto.sickNoteAcceptedByManagementForManagement.visible
+              }"
+          >
+            <h2
+              class="tw-sticky tw-text-lg tw-border-b tw-bg-white dark:tw-bg-zinc-900 dark:tw-py-0.5"
+              style="top: var(--uv-header-height)"
+              th:text="#{person.notifications.section.sicknote.management.title}"
+            >
+              Krankmeldungen meiner Kolleg:innen
+            </h2>
+            <ul class="list-selectable tw-list-none tw-m-0 tw-p-0">
+              <li
+                th:replace="~{person/notifications/notification-card::list-item-card(visible=${personNotificationsDto.sickNoteCreatedByManagementForManagement.visible},active=${personNotificationsDto.sickNoteCreatedByManagementForManagement.active},name='sickNoteCreatedByManagementForManagement.active',label='person.notifications.section.sicknote.created.management.label',info='person.notifications.section.sicknote.created.management.info')}"
+              ></li>
+              <li
+                th:replace="~{person/notifications/notification-card::list-item-card(visible=${personNotificationsDto.sickNoteSubmittedByUserForManagement.visible},active=${personNotificationsDto.sickNoteSubmittedByUserForManagement.active},name='sickNoteSubmittedByUserForManagement.active',label='person.notifications.section.sicknote.submitted.management.label',info='person.notifications.section.sicknote.submitted.management.info')}"
+              ></li>
+              <li
+                th:replace="~{person/notifications/notification-card::list-item-card(visible=${personNotificationsDto.sickNoteAcceptedByManagementForManagement.visible},active=${personNotificationsDto.sickNoteAcceptedByManagementForManagement.active},name='sickNoteAcceptedByManagementForManagement.active',label='person.notifications.section.sicknote.accepted.management.label',info='person.notifications.section.sicknote.accepted.management.info')}"
+              ></li>
+            </ul>
+          </section>
           <section th:if="${personNotificationsDto.overtimeAppliedForManagement.visible}">
             <h2
               class="tw-sticky tw-text-lg tw-border-b tw-bg-white dark:tw-bg-zinc-900 dark:tw-py-0.5"
@@ -181,15 +208,11 @@
       </div>
 
       <noscript>
-        <div class="tw-mt-24 form-section tw-mb-16">
-          <hr />
-          <button th:text="#{action.save}" class="button-main-green col-xs-12 col-sm-5 col-md-2" type="submit"></button>
-          <button
-            th:text="#{action.cancel}"
-            type="button"
-            class="button col-xs-12 col-sm-5 col-md-2 pull-right"
-            data-back-button
-          ></button>
+        <hr class="tw-w-full tw-m-0 tw-mt-6" />
+
+        <div class="tw-mt-6 tw-flex tw-justify-between tw-gap-4">
+          <button th:text="#{action.save}" class="button-main-green tw-w-56" type="submit">Speichern</button>
+          <button data-back-button th:text="#{action.cancel}" type="button" class="button">Abbrechen</button>
         </div>
       </noscript>
     </form>

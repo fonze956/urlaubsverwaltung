@@ -1,35 +1,10 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
-  <head th:replace="_layout::head(~{::title}, ~{::styles}, ~{::scripts})">
+  <head
+    th:replace="~{_layout::head(title=~{::title}, scripts=~{::scripts}, scriptsDefer=~{::scriptsDefer}, preload=~{::preload})}"
+  >
     <title th:text="#{person.form.workingTime.header.title(${person.niceName})}">Arbeitszeiten von</title>
-    <th:block th:fragment="styles">
-      <link
-        rel="stylesheet"
-        type="text/css"
-        asset:href="account_form~app_form~app_statistics~overtime_form~sick_note_form~sick_notes~workingtime_form.css"
-      />
-      <link
-        rel="stylesheet"
-        type="text/css"
-        asset:href="account_form~app_form~app_statistics~overtime_form~person_overview~sick_note_form~sick_notes~workingtime_form.css"
-      />
-    </th:block>
     <th:block th:fragment="scripts">
-      <script defer asset:src="npm.duetds.js"></script>
-      <script defer asset:src="npm.date-fns.js"></script>
-      <script
-        defer
-        asset:src="account_form~app_form~app_statistics~overtime_form~sick_note_form~sick_notes~workingtime_form.js"
-      ></script>
-      <script
-        defer
-        asset:src="account_form~app_form~app_statistics~overtime_form~person_overview~sick_note_form~sick_notes~workingtime_form.js"
-      ></script>
-      <script
-        defer
-        asset:src="account_form~app_detail~app_form~app_statistics~common~overtime_form~person_overview~sick_note_form~~ac852a85.js"
-      ></script>
-      <script defer asset:src="workingtime_form.js"></script>
       <script th:inline="javascript">
         /*<![CDATA[*/
         window.uv = window.uv || {};
@@ -38,10 +13,16 @@
         window.uv.apiPrefix = /*[[@{/api}]]*/ "/api";
         /*]]>*/
       </script>
-      <script th:replace="fragments/datepicker-localization"></script>
+      <script th:replace="~{fragments/datepicker-localization :: datepicker-localization}"></script>
+    </th:block>
+    <th:block th:fragment="preload">
+      <link rel="preload" th:replace="~{fragments/asset-dependency-preload::links('workingtime_form.js')}" />
+    </th:block>
+    <th:block th:fragment="scriptsDefer">
+      <script defer type="module" asset:src="workingtime_form.js"></script>
     </th:block>
   </head>
-  <body th:replace="_layout::body(~{::main}, ~{})">
+  <body th:replace="~{_layout::body(~{::main}, ~{})}">
     <main th:fragment="main">
       <div class="tw-max-w-6xl tw-mx-auto tw-px-4 lg:tw-px-12 xl:tw-px-0">
         <form
@@ -52,7 +33,7 @@
         >
           <div class="form-section">
             <div
-              th:replace="fragments/section-heading::section-heading(~{::workingtime-heading-body}, ~{::workingtime-heading-actions})"
+              th:replace="~{fragments/section-heading::section-heading(~{::workingtime-heading-body}, ~{::workingtime-heading-actions})}"
             >
               <th:block th:ref="workingtime-heading-body">
                 <h1 th:text="#{person.form.workingTime.title(${person.niceName})}">Arbeitszeiten von Marlene Muster</h1>
@@ -71,7 +52,7 @@
             >
               <div class="col-md-4 col-md-push-8">
                 <span class="help-block tw-text-sm">
-                  <svg th:replace="icon/info::svg(className='tw-w-4 tw-h-4')"></svg>
+                  <svg th:replace="~{icon/info::svg(className='tw-w-4 tw-h-4')}"></svg>
                   &nbsp;
                   <th:block
                     th:text="#{person.form.workingTime.federalState.description(${defaultFederalCountryAndStateName})}"
@@ -79,7 +60,7 @@
                   >
                 </span>
                 <span class="help-block tw-text-sm">
-                  <svg th:replace="icon/info::svg(className='tw-w-4 tw-h-4')"></svg>
+                  <svg th:replace="~{icon/info::svg(className='tw-w-4 tw-h-4')}"></svg>
                   &nbsp;<th:block th:text="#{person.form.workingTime.description}">Description</th:block>
                 </span>
               </div>
@@ -94,7 +75,7 @@
 
                   <div class="col-md-9">
                     <select
-                      th:replace="fragments/select::one(id='federalStateType', name='federalState', options=~{::federalStateOptions})"
+                      th:replace="~{fragments/select::one(id='federalStateType', name='federalState', options=~{::federalStateOptions})}"
                       id="federalStateType"
                     >
                       <th:block th:fragment="federalStateOptions">
@@ -107,7 +88,7 @@
                           <option
                             th:text="#{federalState.NONE}"
                             value="NONE"
-                            th:selected="${workingTime.defaultFederalState == false && workingTime.defaultFederalState == 'NONE'}"
+                            th:selected="${workingTime.defaultFederalState == false && workingTime.federalState.name == 'NONE'}"
                           ></option>
                         </optgroup>
 
@@ -121,7 +102,7 @@
                             th:with="countryMessageKey3=|federalState.${federalStateType}|"
                             th:text="#{${countryMessageKey3}}"
                             th:value="${federalStateType}"
-                            th:selected="${workingTime.defaultFederalState== false && workingTime.federalState==federalStateType}"
+                            th:selected="${workingTime.defaultFederalState== false && workingTime.federalState == federalStateType}"
                           ></option>
                         </optgroup>
                       </th:block>
@@ -214,23 +195,11 @@
             </div>
           </div>
 
-          <div class="form-section">
-            <div class="row tw-mb-16">
-              <div class="col-xs-12">
-                <hr />
-                <button
-                  th:text="#{action.save}"
-                  class="button-main-green col-xs-12 col-sm-5 col-md-2"
-                  type="submit"
-                ></button>
-                <button
-                  th:text="#{action.cancel}"
-                  type="button"
-                  class="button col-xs-12 col-sm-5 col-md-2 pull-right"
-                  data-back-button
-                ></button>
-              </div>
-            </div>
+          <hr class="tw-w-full tw-m-0 tw-mt-6" />
+
+          <div class="tw-mt-6 tw-flex tw-justify-between tw-gap-4">
+            <button type="submit" class="button-main-green tw-w-56" th:text="#{action.save}">Speichern</button>
+            <button data-back-button th:text="#{action.cancel}" type="button" class="button">Abbrechen</button>
           </div>
         </form>
       </div>

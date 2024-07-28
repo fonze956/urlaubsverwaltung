@@ -1,11 +1,11 @@
 package org.synyx.urlaubsverwaltung.department;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import javax.persistence.Column;
-import javax.persistence.Embeddable;
-import javax.persistence.JoinColumn;
-import javax.persistence.ManyToOne;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -16,7 +16,7 @@ class DepartmentMemberEmbeddable {
     @JoinColumn(name = "members_id", nullable = false)
     private Person person;
 
-    @Column(name = "accession_date")
+    @Column(name = "accession_date", nullable = false)
     private Instant accessionDate;
 
     public Person getPerson() {

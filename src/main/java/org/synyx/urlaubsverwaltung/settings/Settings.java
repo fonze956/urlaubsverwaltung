@@ -1,18 +1,21 @@
 package org.synyx.urlaubsverwaltung.settings;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
 import org.synyx.urlaubsverwaltung.absence.TimeSettings;
 import org.synyx.urlaubsverwaltung.account.AccountSettings;
 import org.synyx.urlaubsverwaltung.application.settings.ApplicationSettings;
-import org.synyx.urlaubsverwaltung.calendarintegration.CalendarSettings;
 import org.synyx.urlaubsverwaltung.overtime.OvertimeSettings;
 import org.synyx.urlaubsverwaltung.person.settings.AvatarSettings;
 import org.synyx.urlaubsverwaltung.sicknote.settings.SickNoteSettings;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeSettings;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
 import java.util.Objects;
+
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 
 /**
@@ -22,35 +25,29 @@ import java.util.Objects;
 public class Settings {
 
     @Id
-    @GeneratedValue
-    private Integer id;
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "settings_generator")
+    @SequenceGenerator(name = "settings_generator", sequenceName = "settings_id_seq", allocationSize = 1)
+    private Long id;
 
-    private ApplicationSettings applicationSettings;
-    private AccountSettings accountSettings;
-    private WorkingTimeSettings workingTimeSettings;
-    private OvertimeSettings overtimeSettings;
-    private TimeSettings timeSettings;
-    private SickNoteSettings sickNoteSettings;
-
-    private AvatarSettings avatarSettings;
-
-    @Deprecated(since = "4.0.0", forRemoval = true)
-    private CalendarSettings calendarSettings;
+    private ApplicationSettings applicationSettings = new ApplicationSettings();
+    private AccountSettings accountSettings = new AccountSettings();
+    private WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
+    private OvertimeSettings overtimeSettings = new OvertimeSettings();
+    private TimeSettings timeSettings = new TimeSettings();
+    private SickNoteSettings sickNoteSettings = new SickNoteSettings();
+    private AvatarSettings avatarSettings = new AvatarSettings();
 
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
     public ApplicationSettings getApplicationSettings() {
-        if (applicationSettings == null) {
-            applicationSettings = new ApplicationSettings();
-        }
-
         return applicationSettings;
     }
 
@@ -59,10 +56,6 @@ public class Settings {
     }
 
     public AccountSettings getAccountSettings() {
-        if (accountSettings == null) {
-            accountSettings = new AccountSettings();
-        }
-
         return accountSettings;
     }
 
@@ -71,10 +64,6 @@ public class Settings {
     }
 
     public WorkingTimeSettings getWorkingTimeSettings() {
-        if (workingTimeSettings == null) {
-            workingTimeSettings = new WorkingTimeSettings();
-        }
-
         return workingTimeSettings;
     }
 
@@ -83,10 +72,6 @@ public class Settings {
     }
 
     public OvertimeSettings getOvertimeSettings() {
-        if (overtimeSettings == null) {
-            overtimeSettings = new OvertimeSettings();
-        }
-
         return overtimeSettings;
     }
 
@@ -94,27 +79,7 @@ public class Settings {
         this.overtimeSettings = overtimeSettings;
     }
 
-    public CalendarSettings getCalendarSettings() {
-
-        if (calendarSettings == null) {
-            calendarSettings = new CalendarSettings();
-        }
-
-        return calendarSettings;
-    }
-
-    @Deprecated(since = "4.0.0", forRemoval = true)
-    public void setCalendarSettings(CalendarSettings calendarSettings) {
-
-        this.calendarSettings = calendarSettings;
-    }
-
     public TimeSettings getTimeSettings() {
-
-        if (timeSettings == null) {
-            timeSettings = new TimeSettings();
-        }
-
         return timeSettings;
     }
 
@@ -123,11 +88,6 @@ public class Settings {
     }
 
     public SickNoteSettings getSickNoteSettings() {
-
-        if (sickNoteSettings == null) {
-            sickNoteSettings = new SickNoteSettings();
-        }
-
         return sickNoteSettings;
     }
 

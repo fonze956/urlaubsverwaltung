@@ -1,7 +1,8 @@
 package org.synyx.urlaubsverwaltung.vacations;
 
+import org.springframework.hateoas.RepresentationModel;
 import org.synyx.urlaubsverwaltung.application.application.Application;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.person.api.PersonDto;
 import org.synyx.urlaubsverwaltung.person.api.PersonMapper;
 
@@ -11,7 +12,7 @@ import java.time.format.DateTimeFormatter;
 import static java.time.format.DateTimeFormatter.ofPattern;
 import static org.synyx.urlaubsverwaltung.api.RestApiDateFormat.DATE_PATTERN;
 
-class VacationDto {
+public class VacationDto extends RepresentationModel<VacationDto> {
 
     private static final DateTimeFormatter formatter = ofPattern(DATE_PATTERN);
 
@@ -30,7 +31,7 @@ class VacationDto {
         this.person = PersonMapper.mapToDto(application.getPerson());
         this.status = application.getStatus().name();
 
-        VacationTypeEntity vacationType = application.getVacationType();
+        VacationType<?> vacationType = application.getVacationType();
         this.type = vacationType.getCategory().toString();
     }
 

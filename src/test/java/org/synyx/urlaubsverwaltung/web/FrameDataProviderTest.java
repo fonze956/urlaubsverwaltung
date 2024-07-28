@@ -18,6 +18,7 @@ import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.person.settings.AvatarSettings;
 import org.synyx.urlaubsverwaltung.settings.Settings;
 import org.synyx.urlaubsverwaltung.settings.SettingsService;
+import org.synyx.urlaubsverwaltung.sicknote.settings.SickNoteSettings;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -50,10 +51,10 @@ class FrameDataProviderTest {
 
     @Test
     void postHandleWithoutSignedInUserModel() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
         person.setEmail("person@example.org");
@@ -66,17 +67,17 @@ class FrameDataProviderTest {
         sut.postHandle(request, null, null, modelAndView);
 
         assertThat(modelAndView.getModelMap()).containsEntry("menuGravatarUrl", "https://gravatar.com/avatar/f651d5c5f6f68c5b13f2846da4ea544b");
-        assertThat(modelAndView.getModelMap()).containsEntry("userId", 10);
+        assertThat(modelAndView.getModelMap()).containsEntry("userId", 10L);
         assertThat(modelAndView.getModelMap()).containsEntry("userFirstName", "Marie");
         assertThat(modelAndView.getModelMap()).containsEntry("userLastName", "Reichenbach");
     }
 
     @Test
     void postHandleNavigationAccessForBoss() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, BOSS, SICK_NOTE_VIEW));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -96,9 +97,8 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user"),
                     new NavigationItemDto("department-link", "/web/department", "nav.department.title", "users")
@@ -106,15 +106,15 @@ class FrameDataProviderTest {
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", false);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleNavigationAccessForBossAndSickNoteAdd() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, BOSS, SICK_NOTE_VIEW, SICK_NOTE_ADD));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -134,9 +134,8 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user"),
                     new NavigationItemDto("department-link", "/web/department", "nav.department.title", "users")
@@ -144,15 +143,15 @@ class FrameDataProviderTest {
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", true);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleNavigationAccessForOffice() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, OFFICE));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -172,9 +171,8 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user"),
                     new NavigationItemDto("department-link", "/web/department", "nav.department.title", "users"),
@@ -183,15 +181,15 @@ class FrameDataProviderTest {
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", true);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleNavigationAccessForDepartmentHead() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, DEPARTMENT_HEAD, SICK_NOTE_VIEW));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -211,24 +209,23 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user")
                 );
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", false);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleNavigationAccessForDepartmentHeadAndSickNoteAdd() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, DEPARTMENT_HEAD, SICK_NOTE_VIEW, SICK_NOTE_ADD));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -248,24 +245,23 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user")
                 );
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", true);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleNavigationAccessForSecondStageAuthority() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY, SICK_NOTE_VIEW));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -285,24 +281,23 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user")
                 );
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", false);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleNavigationAccessForSecondStageAuthorityAndSickNoteAdd() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY, SICK_NOTE_VIEW, SICK_NOTE_ADD));
         person.setFirstName("Marie");
         person.setLastName("Reichenbach");
@@ -322,21 +317,20 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).containsExactly(
                     new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"),
-                    new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"),
                     new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"),
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"),
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"),
                     new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"),
                     new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user")
                 );
             });
 
         assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", true);
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @Test
     void postHandleWithSignedInUserModel() {
-        mockSettings(true, false, true);
+        mockSettings(true, false, true, false);
 
         final Person person = new Person();
         person.setEmail("person@example.org");
@@ -353,7 +347,7 @@ class FrameDataProviderTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"redirect:", "login"})
+    @ValueSource(strings = {"forward::view-name", "redirect::view-name"})
     @NullSource
     void postHandleDoNotAddGravatar(String viewName) {
 
@@ -368,7 +362,7 @@ class FrameDataProviderTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void ensureOvertimeIsSetForOfficeWhenFeatureEnabledAnd(boolean privilegedOnly) {
-        mockSettings(true, privilegedOnly, true);
+        mockSettings(true, privilegedOnly, true, false);
 
         final Person person = new Person();
         person.setPermissions(List.of(OFFICE));
@@ -386,17 +380,17 @@ class FrameDataProviderTest {
             .satisfies(navigation -> {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements()).contains(
-                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase")
+                    new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock")
                 );
             });
 
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", true);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void ensureOvertimeNotSetForOfficeWhenFeatureDisabledAnd(boolean privilegedOnly) {
-        mockSettings(false, privilegedOnly, true);
+        mockSettings(false, privilegedOnly, true, false);
 
         final Person person = new Person();
         person.setPermissions(List.of(OFFICE));
@@ -415,10 +409,10 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements())
                     .isNotEmpty()
-                    .doesNotContain(new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"));
+                    .doesNotContain(new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"));
             });
 
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", false);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", false);
     }
 
     static Stream<Arguments> modelPropertiesNavigation() {
@@ -433,7 +427,7 @@ class FrameDataProviderTest {
     @ParameterizedTest
     @MethodSource("modelPropertiesNavigation")
     void ensureForOvertimeAndRequestIsCorrectSetForOffice(String property, boolean propertyValue, boolean overtimeEnabled, boolean overtimeWritePrivilegedOnly) {
-        mockSettings(overtimeEnabled, overtimeWritePrivilegedOnly, true);
+        mockSettings(overtimeEnabled, overtimeWritePrivilegedOnly, true, false);
 
         final Person person = new Person();
         person.setPermissions(List.of(OFFICE));
@@ -449,8 +443,8 @@ class FrameDataProviderTest {
     }
 
     @Test
-    void ensureQuickAddPopupIsDisabledWhenUserIsLoggedInAndOvertimeIsDisabled() {
-        mockSettings(false, false, true);
+    void ensureQuickAddPopupIsDisabledWhenUserIsLoggedInAndOvertimeIsDisabledAndSubmitSicknotesIsDisabled() {
+        mockSettings(false, false, true, false);
 
         final Person person = new Person();
         person.setPermissions(List.of(USER));
@@ -466,8 +460,26 @@ class FrameDataProviderTest {
     }
 
     @Test
-    void ensureOvertimeItemIsNotEnabledWhenOvertimeIsRestrictedToPrivileged() {
-        mockSettings(true, true, true);
+    void ensureQuickAddPopupIsEnabledWhenUserIsLoggedInAndOvertimeIsDisabledAndSubmitSicknotesIsEnabled() {
+        mockSettings(false, false, true, true);
+
+        final Person person = new Person();
+        person.setPermissions(List.of(USER));
+        when(personService.getSignedInUser()).thenReturn(person);
+
+        final ModelAndView modelAndView = new ModelAndView();
+        modelAndView.setViewName("someView");
+
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        sut.postHandle(request, null, null, modelAndView);
+
+        assertThat(modelAndView.getModel()).containsEntry("navigationRequestPopupEnabled", true);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationSickNoteAddAccess", true);
+    }
+
+    @Test
+    void ensureOvertimeItemIsEnabledWhenOvertimeIsRestrictedToPrivileged() {
+        mockSettings(true, true, true, false);
 
         final Person person = new Person();
         person.setPermissions(List.of(USER));
@@ -486,16 +498,16 @@ class FrameDataProviderTest {
                 final NavigationDto dto = (NavigationDto) navigation;
                 assertThat(dto.getElements())
                     .isNotEmpty()
-                    .doesNotContain(new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"));
+                    .contains(new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"));
             });
 
-        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeItemEnabled", false);
+        assertThat(modelAndView.getModelMap()).containsEntry("navigationOvertimeAddAccess", false);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void ensureAvatarSettingsIsInModel(boolean gravatarEnabled) {
-        mockSettings(false, false, gravatarEnabled);
+        mockSettings(false, false, gravatarEnabled, false);
 
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
@@ -509,7 +521,7 @@ class FrameDataProviderTest {
         assertThat(modelAndView.getModelMap()).containsEntry("gravatarEnabled", gravatarEnabled);
     }
 
-    private void mockSettings(boolean overtimeFeatureActive, boolean overtimeWritePrivilegedOnly, boolean gravatarEnabled) {
+    private void mockSettings(boolean overtimeFeatureActive, boolean overtimeWritePrivilegedOnly, boolean gravatarEnabled, boolean submitSicknotesEnabled) {
         final OvertimeSettings overtimeSettings = new OvertimeSettings();
         overtimeSettings.setOvertimeActive(overtimeFeatureActive);
         overtimeSettings.setOvertimeWritePrivilegedOnly(overtimeWritePrivilegedOnly);
@@ -517,9 +529,13 @@ class FrameDataProviderTest {
         final AvatarSettings avatarSettings = new AvatarSettings();
         avatarSettings.setGravatarEnabled(gravatarEnabled);
 
+        final SickNoteSettings sickNoteSettings = new SickNoteSettings();
+        sickNoteSettings.setUserIsAllowedToSubmitSickNotes(submitSicknotesEnabled);
+
         final Settings settings = new Settings();
         settings.setOvertimeSettings(overtimeSettings);
         settings.setAvatarSettings(avatarSettings);
+        settings.setSickNoteSettings(sickNoteSettings);
 
         when(settingsService.getSettings()).thenReturn(settings);
     }

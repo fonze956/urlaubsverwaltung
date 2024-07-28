@@ -1,11 +1,13 @@
 package org.synyx.urlaubsverwaltung.application.statistics;
 
 import de.focus_shift.launchpad.api.HasLaunchpad;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.SortDefault;
@@ -32,7 +34,6 @@ import org.synyx.urlaubsverwaltung.web.html.HtmlOptionDto;
 import org.synyx.urlaubsverwaltung.web.html.HtmlSelectDto;
 import org.synyx.urlaubsverwaltung.web.html.PaginationDto;
 
-import javax.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Year;
@@ -42,6 +43,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+import static java.lang.Integer.MAX_VALUE;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.time.temporal.TemporalAdjusters.lastDayOfYear;
 import static java.util.stream.Collectors.joining;
@@ -86,8 +88,7 @@ class ApplicationForLeaveStatisticsViewController implements HasLaunchpad {
     @PreAuthorize(IS_PRIVILEGED_USER)
     @GetMapping
     public String applicationForLeaveStatistics(
-        @SortDefault.SortDefaults({@SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC)})
-        Pageable pageable,
+        @SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC) Pageable pageable,
         @RequestParam(value = "from", defaultValue = "") String from,
         @RequestParam(value = "to", defaultValue = "") String to,
         @RequestParam(value = "query", required = false, defaultValue = "") String query,
@@ -130,7 +131,7 @@ class ApplicationForLeaveStatisticsViewController implements HasLaunchpad {
         model.addAttribute("to", period.getEndDate());
         model.addAttribute("statistics", statisticsDtos);
         model.addAttribute("showPersonnelNumberColumn", showPersonnelNumberColumn);
-        model.addAttribute("vacationTypes", vacationTypeService.getAllVacationTypes());
+        model.addAttribute("vacationTypes", vacationTypeDtos(locale));
 
         final boolean turboFrameRequested = hasText(turboFrame);
         model.addAttribute("turboFrameRequested", turboFrameRequested);
@@ -142,18 +143,23 @@ class ApplicationForLeaveStatisticsViewController implements HasLaunchpad {
         }
     }
 
+    private List<ApplicationForLeaveStatisticsVacationTypeDto> vacationTypeDtos(Locale locale) {
+        return vacationTypeService.getAllVacationTypes().stream()
+            .map(vacationType -> new ApplicationForLeaveStatisticsVacationTypeDto(vacationType.getLabel(locale)))
+            .toList();
+    }
+
     @PreAuthorize(IS_PRIVILEGED_USER)
     @GetMapping(value = "/download")
     public ResponseEntity<ByteArrayResource> downloadCSV(
-        @SortDefault.SortDefaults({@SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC)})
-        Pageable pageable,
+        @SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC) Pageable pageable,
         @RequestParam(value = "from", defaultValue = "") String from,
         @RequestParam(value = "to", defaultValue = "") String to,
+        @RequestParam(value = "allElements", defaultValue = "false") boolean allElements,
         @RequestParam(value = "query", required = false, defaultValue = "") String query,
         Locale locale, HttpServletResponse response
     ) {
         final FilterPeriod period = toFilterPeriod(from, to, locale);
-        final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageable, query);
 
         // NOTE: Not supported at the moment
         if (period.getStartDate().getYear() != period.getEndDate().getYear()) {
@@ -162,15 +168,19 @@ class ApplicationForLeaveStatisticsViewController implements HasLaunchpad {
 
         final Person signedInUser = personService.getSignedInUser();
 
+        final Pageable adaptedPageable = allElements ? PageRequest.of(0, MAX_VALUE, pageable.getSort()) : pageable;
+        final String adaptedQuery = allElements ? "" : query;
+        final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(adaptedPageable, adaptedQuery);
+
         final Page<ApplicationForLeaveStatistics> statisticsPage = applicationForLeaveStatisticsService.getStatistics(signedInUser, period, pageableSearchQuery);
         final List<ApplicationForLeaveStatistics> statistics = statisticsPage.getContent();
         final CSVFile csvFile = applicationForLeaveStatisticsCsvExportService.generateCSV(period, locale, statistics);
 
         final HttpHeaders headers = new HttpHeaders();
         headers.setContentType(new MediaType("text", "csv", UTF_8));
-        headers.setContentDisposition(ContentDisposition.builder("attachment").filename(csvFile.getFileName(), UTF_8).build());
+        headers.setContentDisposition(ContentDisposition.builder("attachment").filename(csvFile.fileName(), UTF_8).build());
 
-        return ResponseEntity.status(OK).headers(headers).body(csvFile.getResource());
+        return ResponseEntity.status(OK).headers(headers).body(csvFile.resource());
     }
 
     private FilterPeriod toFilterPeriod(String startDateString, String endDateString, Locale locale) {

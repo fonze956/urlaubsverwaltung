@@ -1,6 +1,7 @@
 package org.synyx.urlaubsverwaltung.calendar;
 
 import de.focus_shift.launchpad.api.HasLaunchpad;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -18,7 +19,6 @@ import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 
-import javax.validation.Valid;
 import java.time.Period;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,9 +44,14 @@ public class CalendarSharingViewController implements HasLaunchpad {
     private final CalendarAccessibleService calendarAccessibleService;
 
     @Autowired
-    public CalendarSharingViewController(PersonCalendarService personCalendarService, DepartmentCalendarService departmentCalendarService,
-                                         CompanyCalendarService companyCalendarService, PersonService personService, DepartmentService departmentService,
-                                         CalendarAccessibleService calendarAccessibleService) {
+    CalendarSharingViewController(
+        PersonCalendarService personCalendarService,
+        DepartmentCalendarService departmentCalendarService,
+        CompanyCalendarService companyCalendarService,
+        PersonService personService,
+        DepartmentService departmentService,
+        CalendarAccessibleService calendarAccessibleService
+    ) {
         this.personCalendarService = personCalendarService;
         this.departmentCalendarService = departmentCalendarService;
         this.companyCalendarService = companyCalendarService;
@@ -80,7 +85,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
 
     @GetMapping("/persons/{personId}/departments/{activeDepartmentId}")
     @PreAuthorize(IS_BOSS_OR_OFFICE + " or @userApiMethodSecurity.isSamePersonId(authentication, #personId)")
-    public String indexDepartment(@PathVariable int personId, @PathVariable int activeDepartmentId, Model model) {
+    public String indexDepartment(@PathVariable long personId, @PathVariable long activeDepartmentId, Model model) {
 
         final PersonCalendarDto dto = getPersonCalendarDto(personId);
         model.addAttribute("privateCalendarShare", dto);
@@ -96,7 +101,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
         return "calendarsharing/index";
     }
 
-    private void prepareModelForOtherCalendarSharePerson(int personId, Model model, Person signedInUser) {
+    private void prepareModelForOtherCalendarSharePerson(long personId, Model model, Person signedInUser) {
         final boolean isSignedInUser = personId == signedInUser.getId();
         model.addAttribute("isSignedInUser", isSignedInUser);
 
@@ -108,7 +113,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
 
     @PostMapping(value = "/persons/{personId}/me")
     @PreAuthorize(IS_BOSS_OR_OFFICE + " or @userApiMethodSecurity.isSamePersonId(authentication, #personId)")
-    public String linkPrivateCalendar(@PathVariable int personId, @Valid @ModelAttribute PersonCalendarDto personCalendarDto) {
+    public String linkPrivateCalendar(@PathVariable long personId, @Valid @ModelAttribute PersonCalendarDto personCalendarDto) {
 
         final Period calendarPeriod = personCalendarDto.getCalendarPeriod().getPeriod();
         personCalendarService.createCalendarForPerson(personId, calendarPeriod);
@@ -177,7 +182,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
         return format(REDIRECT_WEB_CALENDARS_SHARE_PERSONS, personId);
     }
 
-    private void prepareModelForCompanyCalendar(Model model, int personId, Person signedInUser) {
+    private void prepareModelForCompanyCalendar(Model model, long personId, Person signedInUser) {
 
         final boolean isBossOrOffice = signedInUser.hasRole(OFFICE) || signedInUser.hasRole(BOSS);
         final boolean companyCalendarAccessible = calendarAccessibleService.isCompanyCalendarAccessible();
@@ -196,7 +201,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
         }
     }
 
-    private PersonCalendarDto getPersonCalendarDto(int personId) {
+    private PersonCalendarDto getPersonCalendarDto(long personId) {
         final PersonCalendarDto dto = new PersonCalendarDto();
         dto.setPersonId(personId);
 
@@ -218,7 +223,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
         return getDepartmentCalendarDtos(personId, null);
     }
 
-    private List<DepartmentCalendarDto> getDepartmentCalendarDtos(int personId, @Nullable Integer activeDepartmentId) {
+    private List<DepartmentCalendarDto> getDepartmentCalendarDtos(long personId, @Nullable Long activeDepartmentId) {
 
         final Person person = getPersonOrThrow(personId);
         final List<Department> departments = departmentService.getAssignedDepartmentsOfMember(person);
@@ -253,13 +258,13 @@ public class CalendarSharingViewController implements HasLaunchpad {
         }
 
         if (!departmentCalendarDtos.isEmpty() && departmentCalendarDtos.stream().noneMatch(DepartmentCalendarDto::isActive)) {
-            departmentCalendarDtos.get(0).setActive(true);
+            departmentCalendarDtos.getFirst().setActive(true);
         }
 
         return departmentCalendarDtos;
     }
 
-    private CompanyCalendarDto getCompanyCalendarDto(int personId) {
+    private CompanyCalendarDto getCompanyCalendarDto(long personId) {
 
         final CompanyCalendarDto companyCalendarDto = new CompanyCalendarDto();
         companyCalendarDto.setPersonId(personId);
@@ -279,7 +284,7 @@ public class CalendarSharingViewController implements HasLaunchpad {
         return companyCalendarDto;
     }
 
-    private Person getPersonOrThrow(int personId) {
+    private Person getPersonOrThrow(long personId) {
 
         final Optional<Person> maybePerson = personService.getPersonByID(personId);
         if (maybePerson.isEmpty()) {

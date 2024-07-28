@@ -1,6 +1,7 @@
 package org.synyx.urlaubsverwaltung.application.vacationtype;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.StaticMessageSource;
 
 import java.util.List;
 
@@ -18,21 +19,15 @@ class VacationTypeViewModelServiceTest {
         final VacationTypeService vacationTypeService = mock(VacationTypeService.class);
         final VacationTypeViewModelService sut = new VacationTypeViewModelService(vacationTypeService);
 
-        final VacationType personalHoliday = new VacationType();
-        personalHoliday.setId(1);
-        personalHoliday.setColor(YELLOW);
-
-        final VacationType companyHoliday = new VacationType();
-        companyHoliday.setId(2);
-        companyHoliday.setColor(ORANGE);
-
+        final VacationType<?> personalHoliday = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).color(YELLOW).build();
+        final VacationType<?> companyHoliday = ProvidedVacationType.builder(new StaticMessageSource()).id(2L).color(ORANGE).build();
         when(vacationTypeService.getAllVacationTypes()).thenReturn(List.of(personalHoliday, companyHoliday));
 
         final List<VacationTypeDto> actual = sut.getVacationTypeColors();
 
         assertThat(actual).containsExactly(
-            new VacationTypeDto(1, YELLOW),
-            new VacationTypeDto(2, ORANGE)
+            new VacationTypeDto(1L, YELLOW),
+            new VacationTypeDto(2L, ORANGE)
         );
     }
 }

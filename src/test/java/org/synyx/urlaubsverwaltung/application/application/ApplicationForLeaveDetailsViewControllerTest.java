@@ -3,8 +3,11 @@ package org.synyx.urlaubsverwaltung.application.application;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.MessageSource;
+import org.springframework.context.support.StaticMessageSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -12,9 +15,12 @@ import org.springframework.validation.Errors;
 import org.synyx.urlaubsverwaltung.account.AccountService;
 import org.synyx.urlaubsverwaltung.account.VacationDaysService;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationComment;
+import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentAction;
+import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentForm;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentService;
 import org.synyx.urlaubsverwaltung.application.comment.ApplicationCommentValidator;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.department.Department;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
@@ -28,15 +34,17 @@ import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
-import static java.util.Collections.singletonList;
+import static java.util.Locale.GERMAN;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,7 +56,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.REJECTED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
@@ -65,7 +72,7 @@ class ApplicationForLeaveDetailsViewControllerTest {
 
     private ApplicationForLeaveDetailsViewController sut;
 
-    private static final int APPLICATION_ID = 57;
+    private static final long APPLICATION_ID = 57;
     private static final String ERRORS_ATTRIBUTE = "errors";
 
     @Mock
@@ -125,78 +132,151 @@ class ApplicationForLeaveDetailsViewControllerTest {
     @Test
     void showApplicationDetailUsesProvidedYear() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
         when(personService.getSignedInUser()).thenReturn(somePerson());
-        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
         final int requestedYear = 1987;
 
-        perform(get("/web/application/" + APPLICATION_ID)
-            .param("year", Integer.toString(requestedYear))
-        ).andExpect(model().attribute("selectedYear", requestedYear));
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+                .param("year", Integer.toString(requestedYear))
+        )
+            .andExpect(model().attribute("selectedYear", requestedYear));
     }
 
     @Test
     void showApplicationDetailWithUserDepartments() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
-        when(personService.getSignedInUser()).thenReturn(somePerson());
-        when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
 
         final Person person = new Person();
-        person.setId(1);
-        final Application application = someApplication();
-        application.setPerson(person);
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
+        when(personService.getSignedInUser()).thenReturn(somePerson());
+        when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
         when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
 
         final Department department = new Department();
         when(departmentService.getAssignedDepartmentsOfMember(person)).thenReturn(List.of(department));
 
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(model().attribute("departmentsOfPerson", List.of(department)));
     }
 
     @Test
     void showApplicationDetailDefaultsToApplicationEndDateYearIfNoYearProvided() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
-        when(personService.getSignedInUser()).thenReturn(somePerson());
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
 
-        Application application = someApplication();
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
+        when(personService.getSignedInUser()).thenReturn(somePerson());
 
         when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
         final int applicationEndYear = application.getEndDate().getYear();
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(model().attribute("selectedYear", applicationEndYear));
     }
 
     @Test
     void showApplicationDetailUsesCorrectView() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
         when(personService.getSignedInUser()).thenReturn(somePerson());
-        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(view().name("application/application-detail"));
     }
 
     @Test
     void showApplicationDetailSignedInUserIsBoss() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
-        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
         final Person boss = new Person("boss", "boss", "boss", "boss@example.org");
         boss.setPermissions(List.of(USER, BOSS));
         when(personService.getSignedInUser()).thenReturn(boss);
 
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(view().name("application/application-detail"))
             .andExpect(model().attribute("isBoss", true));
     }
@@ -204,15 +284,31 @@ class ApplicationForLeaveDetailsViewControllerTest {
     @Test
     void showApplicationDetailSignedInUserIsOffice() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
-        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
         final Person office = new Person("office", "office", "office", "office@example.org");
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
 
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(view().name("application/application-detail"))
             .andExpect(model().attribute("isOffice", true));
     }
@@ -220,8 +316,21 @@ class ApplicationForLeaveDetailsViewControllerTest {
     @Test
     void showApplicationDetailSignedInUserIsDepartmentHeadOfPerson() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
-        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
         final Person departmentHead = new Person("departmentHead", "departmentHead", "departmentHead", "departmentHead@example.org");
@@ -229,7 +338,10 @@ class ApplicationForLeaveDetailsViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(departmentHead);
         when(departmentService.isDepartmentHeadAllowedToManagePerson(eq(departmentHead), any(Person.class))).thenReturn(true);
 
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(view().name("application/application-detail"))
             .andExpect(model().attribute("isDepartmentHeadOfPerson", true));
     }
@@ -237,8 +349,21 @@ class ApplicationForLeaveDetailsViewControllerTest {
     @Test
     void showApplicationDetailSignedInUserIsSecondStageAuthorityOfPerson() throws Exception {
 
-        when(commentService.getCommentsByApplication(any())).thenReturn(singletonList(new ApplicationComment(somePerson(), clock)));
-        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        final Person person = new Person();
+        person.setId(1L);
+
+        final Application application = applicationOfPerson(person, vacationType);
+
+        when(commentService.getCommentsByApplication(any())).thenReturn(List.of(anyApplicationComment()));
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
         when(departmentService.isSignedInUserAllowedToAccessPersonData(any(), any())).thenReturn(true);
 
         final Person ssa = new Person("ssa", "ssa", "ssa", "ssa@example.org");
@@ -246,7 +371,10 @@ class ApplicationForLeaveDetailsViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(ssa);
         when(departmentService.isSecondStageAuthorityAllowedToManagePerson(eq(ssa), any(Person.class))).thenReturn(true);
 
-        perform(get("/web/application/" + APPLICATION_ID))
+        perform(
+            get("/web/application/" + APPLICATION_ID)
+                .locale(locale)
+        )
             .andExpect(view().name("application/application-detail"))
             .andExpect(model().attribute("isSecondStageAuthorityOfPerson", true));
     }
@@ -418,9 +546,9 @@ class ApplicationForLeaveDetailsViewControllerTest {
         when(applicationInteractionService.allow(any(), any(), any())).thenReturn(allowedApplication());
 
         perform(post("/web/application/" + APPLICATION_ID + "/allow")
-            .param("redirect", "/web/application/"))
+            .param("redirect", "/web/application"))
             .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/web/application/"));
+            .andExpect(redirectedUrl("/web/application"));
     }
 
     @Test
@@ -758,9 +886,9 @@ class ApplicationForLeaveDetailsViewControllerTest {
         when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(someApplication()));
 
         perform(post("/web/application/" + APPLICATION_ID + "/reject")
-            .param("redirect", "/web/application/"))
+            .param("redirect", "/web/application"))
             .andExpect(status().isFound())
-            .andExpect(redirectedUrl("/web/application/"));
+            .andExpect(redirectedUrl("/web/application"));
     }
 
     @Test
@@ -904,8 +1032,13 @@ class ApplicationForLeaveDetailsViewControllerTest {
         signedInPerson.setPermissions(List.of(USER));
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
 
-        final Application application = applicationOfPerson(signedInPerson);
-        application.getVacationType().setRequiresApproval(false);
+        final VacationType vacationType = ProvidedVacationType.builder(new StaticMessageSource())
+            .id(1L)
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(false)
+            .build();
+
+        final Application application = applicationOfPerson(signedInPerson, vacationType);
         when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
 
         perform(post("/web/application/" + APPLICATION_ID + "/cancel"))
@@ -944,6 +1077,32 @@ class ApplicationForLeaveDetailsViewControllerTest {
         perform(post("/web/application/" + APPLICATION_ID + "/cancel"))
             .andExpect(status().isFound())
             .andExpect(redirectedUrl("/web/application/" + APPLICATION_ID));
+    }
+
+    @Test
+    void ensureCancellationRequestedFailsIfNoCommentWasProvided() throws Exception {
+
+        final Person signedInPerson = somePerson();
+        when(personService.getSignedInUser()).thenReturn(signedInPerson);
+
+        final Application application = applicationOfPerson(signedInPerson);
+        application.setStatus(ApplicationStatus.ALLOWED);
+        when(applicationService.getApplicationById(APPLICATION_ID)).thenReturn(Optional.of(application));
+
+        doAnswer(invocation -> {
+            final Errors errors = invocation.getArgument(1);
+            errors.rejectValue("text", "errors");
+            return null;
+        }).when(commentValidator).validate(any(), any());
+
+        perform(post("/web/application/" + APPLICATION_ID + "/cancel"))
+            .andExpect(status().isFound())
+            .andExpect(redirectedUrl("/web/application/" + APPLICATION_ID + "?action=cancel"));
+
+        final ArgumentCaptor<ApplicationCommentForm> captor = ArgumentCaptor.forClass(ApplicationCommentForm.class);
+        verify(commentValidator).validate(captor.capture(), any());
+        final ApplicationCommentForm applicationCommentForm = captor.getValue();
+        assertThat(applicationCommentForm.isMandatory()).isTrue();
     }
 
     @Test
@@ -1252,13 +1411,22 @@ class ApplicationForLeaveDetailsViewControllerTest {
     }
 
     private static Application applicationOfPerson(Person person) {
+
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource())
+            .id(1L)
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .build();
+
+        return applicationOfPerson(person, vacationType);
+    }
+
+    private static Application applicationOfPerson(Person person, VacationType<?> vacationType) {
         final Application application = new Application();
         application.setPerson(person);
         application.setStartDate(LocalDate.now().plusDays(10));
         application.setEndDate(LocalDate.now().plusDays(30));
         application.setStatus(WAITING);
-        final VacationTypeEntity vacationType = new VacationTypeEntity();
-        vacationType.setRequiresApproval(true);
         application.setVacationType(vacationType);
         return application;
     }
@@ -1270,7 +1438,7 @@ class ApplicationForLeaveDetailsViewControllerTest {
     private static Application allowedApplication() {
 
         final Application application = someApplication();
-        application.setStatus(ALLOWED);
+        application.setStatus(ApplicationStatus.ALLOWED);
 
         return application;
     }
@@ -1309,9 +1477,23 @@ class ApplicationForLeaveDetailsViewControllerTest {
 
     private static Person personWithRole(Role... role) {
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(role));
         return person;
+    }
+
+    private ApplicationComment anyApplicationComment() {
+
+        final Application application = new Application();
+        application.setId(1L);
+
+        return new ApplicationComment(1L, clock.instant(), application, ApplicationCommentAction.ALLOWED, somePerson(), "");
+    }
+
+    private MessageSource messageSourceForVacationType(String messageKey, String label, Locale locale) {
+        final MessageSource messageSource = mock(MessageSource.class);
+        when(messageSource.getMessage(messageKey, new Object[]{}, locale)).thenReturn(label);
+        return messageSource;
     }
 
     private ResultActions perform(MockHttpServletRequestBuilder builder) throws Exception {

@@ -5,75 +5,90 @@ on:
     tags:
       - 'urlaubsverwaltung*'
 
+env:
+  MAVEN_ARGS: "--no-transfer-progress --errors --fail-at-end --show-version"
+
 jobs:
-  release:
+  create-github-release:
     runs-on: ubuntu-22.04
-    env:
-      MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version"
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 11
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: 11
+          distribution: 'liberica'
+          java-version: '21'
           cache: 'maven'
-      - name: Cache npm dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
       - name: Build jar with Maven
-        run: >
-          ./mvnw $MAVEN_CLI_OPTS
-          -Pcoverage
-          clean verify
-      - name: Build war with Maven
-        run: >
-          ./mvnw $MAVEN_CLI_OPTS
-          -DskipTests -Dpackaging.layout=war
-          package
-      - name: Extract release tag
+        run: ./mvnw clean package
+      - name: Extract release version
         id: vars
         run: echo "version=${GITHUB_REF#refs/*/urlaubsverwaltung-}" >> $GITHUB_OUTPUT
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           name: Release Urlaubsverwaltung ${{ steps.vars.outputs.version }}
           body_path: .chglog/${{ steps.vars.outputs.version }}.md
           files: |
-            ./target/urlaubsverwaltung-*.war
             ./target/urlaubsverwaltung-*.jar
-      - name: Publish docker image to Docker Hub
-        run: >
-          ./mvnw $MAVEN_CLI_OPTS
-          docker:build
-          docker:push
-          -Ddocker.name=synyx/urlaubsverwaltung
-          -Ddocker.push.registry=registry.hub.docker.com
-          -Ddocker.push.username=${{ secrets.DOCKER_USERNAME }}
-          -Ddocker.push.password=${{ secrets.DOCKER_PASSWORD }}
-      - name: Publish docker image to Docker Hub urlaubsverwaltung
-        run: >
-          ./mvnw $MAVEN_CLI_OPTS
-          docker:build
-          docker:push
-          -Ddocker.name=urlaubsverwaltung/urlaubsverwaltung
-          -Ddocker.push.registry=registry.hub.docker.com
-          -Ddocker.push.username=${{ secrets.DOCKER_UV_USERNAME }}
-          -Ddocker.push.password=${{ secrets.DOCKER_UV_TOKEN }}
+
+  container-upload-github:
+    needs:
+      - create-github-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          cache: 'maven'
       - name: Publish docker image to GitHub Container Registry
         run: >
-          ./mvnw $MAVEN_CLI_OPTS
-          docker:build
-          docker:push
-          -Ddocker.name=urlaubsverwaltung/urlaubsverwaltung
-          -Ddocker.push.registry=ghcr.io
-          -Ddocker.push.username=${{ github.actor }}
-          -Ddocker.push.password=${{ secrets.CR_PAT }}
-          -Ddocker.pull.username=${{ secrets.DOCKER_USERNAME }}
-          -Ddocker.pull.password=${{ secrets.DOCKER_PASSWORD }}
+          ./mvnw spring-boot:build-image
+          -Dspring-boot.build-image.publish=true
+          -Ddocker-publish-registry=ghcr.io
+          -Ddocker-publish-registry-path=${{ github.repository }}
+          -Ddocker-publish-registry-username=${{ github.actor }}
+          -Ddocker-publish-registry-password=${{ secrets.GITHUB_TOKEN }}
+
+  container-upload-docker-hub-urlaubsverwaltung:
+    needs:
+      - create-github-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          cache: 'maven'
+      - name: Publish docker image to Docker Hub urlaubsverwaltung
+        run: >
+          ./mvnw spring-boot:build-image
+          -Dspring-boot.build-image.publish=true
+          -Ddocker-publish-registry=registry.hub.docker.com
+          -Ddocker-publish-registry-path=urlaubsverwaltung
+          -Ddocker-publish-registry-username=${{ secrets.DOCKER_UV_USERNAME }}
+          -Ddocker-publish-registry-password=${{ secrets.DOCKER_UV_TOKEN }}
+
+  container-upload-docker-hub-synyx:
+    needs:
+      - create-github-release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'liberica'
+          java-version: '21'
+          cache: 'maven'
+      - name: Publish docker image to Docker Hub synyx
+        run: >
+          ./mvnw spring-boot:build-image
+          -Dspring-boot.build-image.publish=true
+          -Ddocker-publish-registry=registry.hub.docker.com
+          -Ddocker-publish-registry-path=synyx
+          -Ddocker-publish-registry-username=${{ secrets.DOCKER_USERNAME }}
+          -Ddocker-publish-registry-password=${{ secrets.DOCKER_PASSWORD }}

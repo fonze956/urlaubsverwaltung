@@ -5,14 +5,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.support.StaticMessageSource;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.synyx.urlaubsverwaltung.api.RestControllerAdviceExceptionHandler;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
-import org.synyx.urlaubsverwaltung.department.Department;
+import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
-import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 
@@ -23,8 +23,6 @@ import java.util.Optional;
 import static java.time.LocalDate.of;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -34,7 +32,6 @@ import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standal
 import static org.synyx.urlaubsverwaltung.TestDataCreator.createApplication;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
 import static org.synyx.urlaubsverwaltung.period.DayLength.FULL;
 
 @ExtendWith(MockitoExtension.class)
@@ -58,25 +55,24 @@ class VacationApiControllerTest {
     void getVacations() throws Exception {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        final Application vacation1 = createApplication(person,
-            LocalDate.of(2016, 5, 19), LocalDate.of(2016, 5, 20), DayLength.FULL);
-        vacation1.setStatus(ALLOWED);
-        final Application vacation2 = createApplication(person,
-            LocalDate.of(2016, 4, 5), LocalDate.of(2016, 4, 10), DayLength.FULL);
-        vacation2.setStatus(ALLOWED_CANCELLATION_REQUESTED);
+        final Application allowedVacation = createApplication(person,
+            LocalDate.of(2016, 5, 19), LocalDate.of(2016, 5, 20), FULL, new StaticMessageSource());
+        allowedVacation.setStatus(ALLOWED);
 
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndState(any(LocalDate.class), any(LocalDate.class), eq(person), eq(ALLOWED)))
-            .thenReturn(List.of(vacation1));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndState(any(LocalDate.class), any(LocalDate.class), eq(person), eq(ALLOWED_CANCELLATION_REQUESTED)))
-            .thenReturn(List.of(vacation2));
+        final Application cancellationRequestedVacation = createApplication(person,
+            LocalDate.of(2016, 4, 5), LocalDate.of(2016, 4, 10), FULL, new StaticMessageSource());
+        cancellationRequestedVacation.setStatus(ALLOWED_CANCELLATION_REQUESTED);
 
-        when(personService.getPersonByID(23)).thenReturn(Optional.of(person));
+        when(applicationService.getForStatesAndPerson(ApplicationStatus.activeStatuses(), List.of(person), LocalDate.of(2016, 1, 1), LocalDate.of(2016, 12, 31)))
+            .thenReturn(List.of(allowedVacation, cancellationRequestedVacation));
+
+        when(personService.getPersonByID(23L)).thenReturn(Optional.of(person));
 
         perform(get("/api/persons/23/vacations")
             .param("from", "2016-01-01")
             .param("to", "2016-12-31"))
             .andExpect(status().isOk())
-            .andExpect(content().contentType("application/json;"))
+            .andExpect(content().contentType("application/json"))
             .andExpect(jsonPath("$.vacations", hasSize(2)))
             .andExpect(jsonPath("$.vacations.[0].from", is("2016-05-19")))
             .andExpect(jsonPath("$.vacations.[0].to", is("2016-05-20")))
@@ -89,7 +85,7 @@ class VacationApiControllerTest {
     @Test
     void getVacationsNoPersonFound() throws Exception {
 
-        when(personService.getPersonByID(23)).thenReturn(Optional.empty());
+        when(personService.getPersonByID(23L)).thenReturn(Optional.empty());
 
         perform(get("/api/persons/23/vacations")
             .param("from", "2016-01-01")
@@ -151,56 +147,21 @@ class VacationApiControllerTest {
     }
 
     @Test
-    void getVacationsOfOthersOrDepartmentColleaguesWithDepartments() throws Exception {
+    void ensureToRetrieveApplicationsFromColleagues() throws Exception {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
 
-        final List<Department> departments = List.of(new Department(), new Department());
-        when(departmentService.getAssignedDepartmentsOfMember(person)).thenReturn(departments);
-
-        when(personService.getPersonByID(23)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(23L)).thenReturn(Optional.of(person));
 
         final Application vacationAllowed = createApplication(new Person("muster", "Muster", "Marlene", "muster@example.org"),
-            of(2016, 5, 19), of(2016, 5, 20), FULL);
+            of(2016, 5, 19), of(2016, 5, 20), FULL, new StaticMessageSource());
         vacationAllowed.setStatus(ALLOWED);
-        final Application vacationWaiting = createApplication(new Person("muster", "Muster", "Marlene", "muster@example.org"),
-            of(2016, 5, 19), of(2016, 5, 20), FULL);
-        vacationAllowed.setStatus(WAITING);
-        when(departmentService.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(eq(person), any(LocalDate.class), any(LocalDate.class)))
-            .thenReturn(List.of(vacationAllowed, vacationWaiting));
-
-        perform(get("/api/persons/23/vacations")
-            .param("from", "2016-01-01")
-            .param("to", "2016-12-31")
-            .param("ofDepartmentMembers", "true"))
-            .andExpect(status().isOk())
-            .andExpect(content().contentType("application/json;"))
-            .andExpect(jsonPath("$.vacations", hasSize(2)))
-            .andExpect(jsonPath("$.vacations.[0].from", is("2016-05-19")))
-            .andExpect(jsonPath("$.vacations.[0].to", is("2016-05-20")))
-            .andExpect(jsonPath("$.vacations.[0].person.firstName", is("Marlene")));
-    }
-
-    @Test
-    void getVacationsOfOthersOrDepartmentColleaguesWithoutDepartments() throws Exception {
-
-        final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-
-        when(departmentService.getAssignedDepartmentsOfMember(person)).thenReturn(List.of());
-
-        when(personService.getPersonByID(23)).thenReturn(Optional.of(person));
-
-        final Application vacationAllowed = createApplication(new Person("muster", "Muster", "Marlene", "muster@example.org"),
-            of(2016, 5, 19), of(2016, 5, 20), FULL);
-        vacationAllowed.setStatus(ALLOWED);
-        when(applicationService.getApplicationsForACertainPeriodAndState(any(LocalDate.class), any(LocalDate.class), eq(ALLOWED)))
-            .thenReturn(List.of(vacationAllowed));
-
         final Application vacationAllowedCancelRequested = createApplication(new Person("muster", "Muster", "Marlene", "muster@example.org"),
-            of(2016, 5, 19), of(2016, 5, 20), FULL);
+            of(2016, 5, 19), of(2016, 5, 20), FULL, new StaticMessageSource());
         vacationAllowed.setStatus(ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndState(any(LocalDate.class), any(LocalDate.class), eq(ALLOWED_CANCELLATION_REQUESTED)))
-            .thenReturn(List.of(vacationAllowedCancelRequested));
+
+        when(departmentService.getApplicationsFromColleaguesOf(person, LocalDate.of(2016, 1, 1), LocalDate.of(2016, 12, 31)))
+            .thenReturn(List.of(vacationAllowedCancelRequested, vacationAllowed));
 
         perform(get("/api/persons/23/vacations")
             .param("from", "2016-01-01")
@@ -208,16 +169,93 @@ class VacationApiControllerTest {
             .param("ofDepartmentMembers", "true"))
             .andExpect(status().isOk())
             .andExpect(content().contentType("application/json;"))
-            .andExpect(jsonPath("$.vacations", hasSize(2)))
-            .andExpect(jsonPath("$.vacations.[0].from", is("2016-05-19")))
-            .andExpect(jsonPath("$.vacations.[0].to", is("2016-05-20")))
-            .andExpect(jsonPath("$.vacations.[0].person.firstName", is("Marlene")));
+            .andExpect(content().json("""
+                {
+                  "vacations": [
+                    {
+                      "from": "2016-05-19",
+                      "to": "2016-05-20",
+                      "dayLength": 1,
+                      "person": {
+                        "id": null,
+                        "email": "muster@example.org",
+                        "firstName": "Marlene",
+                        "lastName": "Muster",
+                        "niceName": "Marlene Muster",
+                        "links": [
+                          {
+                            "rel": "self",
+                            "href": "http://localhost/api/persons/{personId}"
+                          },
+                          {
+                            "rel": "absences",
+                            "href": "http://localhost/api/persons/{personId}/absences?from={from}&to={to}&absence-types=vacation&absence-types=sick_note&absence-types=public_holiday&absence-types=no_workday"
+                          },
+                          {
+                            "rel": "sicknotes",
+                            "href": "http://localhost/api/persons/{personId}/sicknotes?from={from}&to={to}"
+                          },
+                          {
+                            "rel": "vacations",
+                            "href": "http://localhost/api/persons/{personId}/vacations?from={from}&to={to}&status=waiting&status=temporary_allowed&status=allowed&status=allowed_cancellation_requested"
+                          },
+                          {
+                            "rel": "workdays",
+                            "href": "http://localhost/api/persons/{personId}/workdays?from={from}&to={to}{&length}"
+                          }
+                        ]
+                      },
+                      "type": "HOLIDAY",
+                      "status": "WAITING",
+                      "links": []
+                    },
+                    {
+                      "from": "2016-05-19",
+                      "to": "2016-05-20",
+                      "dayLength": 1,
+                      "person": {
+                        "id": null,
+                        "email": "muster@example.org",
+                        "firstName": "Marlene",
+                        "lastName": "Muster",
+                        "niceName": "Marlene Muster",
+                        "links": [
+                          {
+                            "rel": "self",
+                            "href": "http://localhost/api/persons/{personId}"
+                          },
+                          {
+                            "rel": "absences",
+                            "href": "http://localhost/api/persons/{personId}/absences?from={from}&to={to}&absence-types=vacation&absence-types=sick_note&absence-types=public_holiday&absence-types=no_workday"
+                          },
+                          {
+                            "rel": "sicknotes",
+                            "href": "http://localhost/api/persons/{personId}/sicknotes?from={from}&to={to}"
+                          },
+                          {
+                            "rel": "vacations",
+                            "href": "http://localhost/api/persons/{personId}/vacations?from={from}&to={to}&status=waiting&status=temporary_allowed&status=allowed&status=allowed_cancellation_requested"
+                          },
+                          {
+                            "rel": "workdays",
+                            "href": "http://localhost/api/persons/{personId}/workdays?from={from}&to={to}{&length}"
+                          }
+                        ]
+                      },
+                      "type": "HOLIDAY",
+                      "status": "ALLOWED_CANCELLATION_REQUESTED",
+                      "links": []
+                    }
+                  ],
+                  "links": []
+                }
+                """,true));
     }
 
     @Test
     void getVacationsOfOthersOrDepartmentColleaguesNoPersonFound() throws Exception {
 
-        when(personService.getPersonByID(23)).thenReturn(Optional.empty());
+        when(personService.getPersonByID(23L)).thenReturn(Optional.empty());
 
         perform(get("/api/persons/23/vacations")
             .param("from", "2016-01-01")

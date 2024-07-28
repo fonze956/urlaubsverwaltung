@@ -49,11 +49,15 @@ public class WorkingTimeViewController implements HasLaunchpad {
     private final Clock clock;
 
     @Autowired
-    public WorkingTimeViewController(PersonService personService, WorkingTimeService workingTimeService,
-                                     WorkingTimeWriteService workingTimeWriteService,
-                                     VacationTypeViewModelService vacationTypeViewModelService,
-                                     SettingsService settingsService, WorkingTimeValidator validator,
-                                     Clock clock) {
+    WorkingTimeViewController(
+        PersonService personService,
+        WorkingTimeService workingTimeService,
+        WorkingTimeWriteService workingTimeWriteService,
+        VacationTypeViewModelService vacationTypeViewModelService,
+        SettingsService settingsService,
+        WorkingTimeValidator validator,
+        Clock clock
+    ) {
         this.personService = personService;
         this.workingTimeService = workingTimeService;
         this.workingTimeWriteService = workingTimeWriteService;
@@ -70,7 +74,7 @@ public class WorkingTimeViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @GetMapping("/person/{personId}/workingtime")
-    public String getWorkingTime(@PathVariable("personId") Integer personId, Model model)
+    public String getWorkingTime(@PathVariable("personId") Long personId, Model model)
         throws UnknownPersonException {
 
         final Person person = personService.getPersonByID(personId).orElseThrow(() -> new UnknownPersonException(personId));
@@ -88,7 +92,7 @@ public class WorkingTimeViewController implements HasLaunchpad {
 
     @PreAuthorize(IS_OFFICE)
     @PostMapping("/person/{personId}/workingtime")
-    public String updateWorkingTime(@PathVariable("personId") Integer personId,
+    public String updateWorkingTime(@PathVariable("personId") Long personId,
                                     @ModelAttribute("workingTime") WorkingTimeForm workingTimeForm, Errors errors,
                                     Model model, RedirectAttributes redirectAttributes) throws UnknownPersonException {
 

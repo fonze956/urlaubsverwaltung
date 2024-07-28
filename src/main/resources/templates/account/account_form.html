@@ -1,35 +1,10 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
-  <head th:replace="_layout::head(~{::title}, ~{::styles}, ~{::scripts})">
+  <head
+    th:replace="~{_layout::head(title=~{::title}, scripts=~{::scripts}, scriptsDefer=~{::scriptsDefer}, preload=~{::preload})}"
+  >
     <title th:text="#{person.form.annualVacation.header.title(${person.niceName})}">Urlaubsanspruch</title>
-    <th:block th:fragment="styles">
-      <link
-        rel="stylesheet"
-        type="text/css"
-        asset:href="account_form~app_form~app_statistics~overtime_form~person_overview~sick_note_form~sick_notes~workingtime_form.css"
-      />
-      <link
-        rel="stylesheet"
-        type="text/css"
-        asset:href="account_form~app_form~app_statistics~overtime_form~sick_note_form~sick_notes~workingtime_form.css"
-      />
-    </th:block>
     <th:block th:fragment="scripts">
-      <script defer asset:src="npm.duetds.js"></script>
-      <script defer asset:src="npm.date-fns.js"></script>
-      <script
-        defer
-        asset:src="account_form~app_detail~app_form~app_statistics~common~overtime_form~person_overview~sick_note_form~~ac852a85.js"
-      ></script>
-      <script
-        defer
-        asset:src="account_form~app_form~app_statistics~overtime_form~person_overview~sick_note_form~sick_notes~workingtime_form.js"
-      ></script>
-      <script
-        defer
-        asset:src="account_form~app_form~app_statistics~overtime_form~sick_note_form~sick_notes~workingtime_form.js"
-      ></script>
-      <script defer asset:src="account_form.js"></script>
       <script th:inline="javascript">
         /*<![CDATA[*/
         window.uv = window.uv || {};
@@ -38,18 +13,24 @@
         window.uv.apiPrefix = /*[[@{/api}]]*/ "/api";
         /*]]>*/
       </script>
-      <script th:replace="fragments/datepicker-localization :: datepicker-localization"></script>
-      <script th:replace="fragments/vacation-type-colors-script :: vacation-type-colors-script"></script>
+      <script th:replace="~{fragments/datepicker-localization :: datepicker-localization}"></script>
+      <script th:replace="~{fragments/vacation-type-colors-script :: vacation-type-colors-script}"></script>
+    </th:block>
+    <th:block th:fragment="preload">
+      <link rel="preload" th:replace="~{fragments/asset-dependency-preload::links('account_form.js')}" />
+    </th:block>
+    <th:block th:fragment="scriptsDefer">
+      <script defer type="module" asset:src="account_form.js"></script>
     </th:block>
   </head>
-  <body th:replace="_layout::body(~{::main}, ~{})">
+  <body th:replace="~{_layout::body(~{::main}, ~{})}">
     <main th:fragment="main">
       <div class="tw-max-w-6xl tw-mx-auto tw-px-4 lg:tw-px-12 xl:tw-px-1.5">
-        <div th:replace="fragments/section-heading::section-heading(~{::account-form-heading-body}, ~{})">
+        <div th:replace="~{fragments/section-heading::section-heading(~{::account-form-heading-body}, ~{})}">
           <th:block th:ref="account-form-heading-body">
             <h1 th:text="#{person.form.annualVacation.title(${person.niceName})}"></h1>
             <div
-              th:replace="fragments/year-selector::year-selector(id='year-selection', currentYear=${currentYear}, hrefPrefix=|/web/person/${person.id}/account?year=|, selectedYear=${selectedYear})"
+              th:replace="~{fragments/year-selector::year-selector(id='year-selection', currentYear=${currentYear}, hrefPrefix=|/web/person/${person.id}/account?year=|, selectedYear=${selectedYear})}"
             ></div>
           </th:block>
         </div>
@@ -74,7 +55,7 @@
             <div class="row tw-mb-16">
               <div class="col-md-4 col-md-push-8">
                 <span class="help-block tw-text-sm">
-                  <svg th:replace="icon/info::svg(className='tw-w-4 tw-h-4')"></svg>
+                  <svg th:replace="~{icon/info::svg(className='tw-w-4 tw-h-4')}"></svg>
                   <span th:text="#{person.form.annualVacation.description}"></span>
                 </span>
               </div>
@@ -205,7 +186,7 @@
                     </label>
                     <div class="col-md-9">
                       <p
-                        class="account-form-remaining-vacation-expire-description tw-mb-4"
+                        class="account-form-expire-description tw-mb-4"
                         th:with="
                           settingsLink=@{/web/settings},
                           settingsMessage=${'<a href=&quot;'+ settingsLink +'&quot;>' + #messages.msg('person.form.annualVacation.remainingVacation.expire.global-info.settings') + '</a>'},
@@ -284,21 +265,36 @@
                       th:text="|#{person.form.annualVacation.remainingVacation.expiryDate}:|"
                       for="expiryDate"
                     >
-                      Resturlaubstage:
+                      Verfallsdatum des Resturlaubs:
                     </label>
                     <div class="col-md-9">
-                      <input
-                        id="expiryDate"
-                        th:field="*{expiryDate}"
-                        th:data-iso-value="${account.expiryDateToIsoValue}"
-                        th:data-min="|${year}-01-01|"
-                        th:data-max="|${year}-12-31|"
-                        th:placeholder="#{pattern.date}"
-                        class="form-control"
-                        th:errorclass="error"
-                      />
-                      <div class="error tw-mt-1 tw-text-sm" th:if="${#fields.hasErrors('expiryDate')}">
-                        <th:block th:errors="*{expiryDate}"> expiryDate Error </th:block>
+                      <div class="tw-flex tw-flex-col">
+                        <p
+                          class="account-form-expire-description tw-m-0"
+                          th:with="
+                          settingsLink=@{/web/settings},
+                          settingsMessage=${'<a href=&quot;'+ settingsLink +'&quot;>' + #messages.msg('person.form.annualVacation.remainingVacation.expiryDate.global-info.settings') + '</a>'},
+                          date=${account.expiryDateGlobally == null ? null : '<span class=&quot;tw-font-bold&quot;>' + #temporals.format(account.expiryDateGlobally, #messages.msg('pattern.date')) + '</span>'},
+                          messageKey=${account.expiryDateGlobally == null ? 'person.form.annualVacation.remainingVacation.expiryDate.global-info.none' : 'person.form.annualVacation.remainingVacation.expiryDate.global-info'}
+                        "
+                          th:utext="${#messages.msg(messageKey, settingsMessage, date)}"
+                        >
+                          In den <a href="#">Einstellungen</a> ist der 1. April 2024 konfiguriert. Du kannst das Datum
+                          überschreiben oder leer lassen und die globale Einstellung nutzen.
+                        </p>
+                        <input
+                          id="expiryDate"
+                          th:field="*{expiryDateLocally}"
+                          th:data-iso-value="${account.expiryDateToIsoValue}"
+                          th:data-min="|${year}-01-01|"
+                          th:data-max="|${year}-12-31|"
+                          th:placeholder="#{pattern.date}"
+                          class="form-control tw-mt-2"
+                          th:errorclass="error"
+                        />
+                        <div class="error tw-mt-1 tw-text-sm" th:if="${#fields.hasErrors('expiryDateLocally')}">
+                          <th:block th:errors="*{expiryDateLocally}"> expiryDate Error </th:block>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -358,23 +354,11 @@
             </div>
           </div>
 
-          <div class="form-section">
-            <div class="row tw-mb-16">
-              <div class="col-xs-12">
-                <hr />
-                <button
-                  th:text="#{action.save}"
-                  class="button-main-green col-xs-12 col-sm-5 col-md-2"
-                  type="submit"
-                ></button>
-                <button
-                  th:text="#{action.cancel}"
-                  type="button"
-                  class="button col-xs-12 col-sm-5 col-md-2 pull-right"
-                  data-back-button
-                ></button>
-              </div>
-            </div>
+          <hr class="tw-w-full tw-m-0 tw-mt-6" />
+
+          <div class="tw-mt-6 tw-flex tw-justify-between tw-gap-4">
+            <button type="submit" class="button-main-green tw-w-56" th:text="#{action.save}">Speichern</button>
+            <button data-back-button th:text="#{action.cancel}" type="button" class="button">Abbrechen</button>
           </div>
         </form>
       </div>

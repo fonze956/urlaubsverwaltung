@@ -11,7 +11,6 @@ import java.util.Optional;
 
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
 import static org.synyx.urlaubsverwaltung.person.Role.SECOND_STAGE_AUTHORITY;
-import static org.synyx.urlaubsverwaltung.security.AuthenticationHelper.userName;
 
 @Component
 public class UserApiMethodSecurity {
@@ -25,37 +24,32 @@ public class UserApiMethodSecurity {
         this.departmentService = departmentService;
     }
 
-    public boolean isInDepartmentOfSecondStageAuthority(Authentication authentication, Integer userId) {
-        final Optional<Person> loggedInUser = personService.getPersonByUsername(userName(authentication));
+    public boolean isInDepartmentOfSecondStageAuthority(Authentication authentication, Long userId) {
+        final Optional<Person> loggedInUser = personService.getPersonByUsername(authentication.getName());
 
         if (loggedInUser.isEmpty() || !loggedInUser.get().hasRole(SECOND_STAGE_AUTHORITY)) {
             return false;
         }
 
-        final Optional<Person> person = personService.getPersonByID(userId);
-        if (person.isEmpty()) {
-            return false;
-        }
+        return personService.getPersonByID(userId)
+            .filter(person -> departmentService.isSecondStageAuthorityAllowedToManagePerson(loggedInUser.get(), person))
+            .isPresent();
 
-        return departmentService.isSecondStageAuthorityAllowedToManagePerson(loggedInUser.get(), person.get());
     }
 
-    public boolean isInDepartmentOfDepartmentHead(Authentication authentication, Integer userId) {
-        final Optional<Person> loggedInUser = personService.getPersonByUsername(userName(authentication));
+    public boolean isInDepartmentOfDepartmentHead(Authentication authentication, Long userId) {
+        final Optional<Person> loggedInUser = personService.getPersonByUsername(authentication.getName());
 
         if (loggedInUser.isEmpty() || !loggedInUser.get().hasRole(DEPARTMENT_HEAD)) {
             return false;
         }
 
-        final Optional<Person> person = personService.getPersonByID(userId);
-        if (person.isEmpty()) {
-            return false;
-        }
-
-        return departmentService.isDepartmentHeadAllowedToManagePerson(loggedInUser.get(), person.get());
+        return personService.getPersonByID(userId)
+            .filter(person -> departmentService.isDepartmentHeadAllowedToManagePerson(loggedInUser.get(), person))
+            .isPresent();
     }
 
-    public boolean isSamePersonId(Authentication authentication, Integer userId) {
+    public boolean isSamePersonId(Authentication authentication, Long userId) {
 
         final Optional<Person> person = personService.getPersonByID(userId);
         if (person.isEmpty()) {
@@ -63,6 +57,6 @@ public class UserApiMethodSecurity {
         }
 
         final String usernameToCheck = person.get().getUsername();
-        return (usernameToCheck != null) && usernameToCheck.equals(userName(authentication));
+        return (usernameToCheck != null) && usernameToCheck.equals(authentication.getName());
     }
 }

@@ -1,16 +1,17 @@
 package org.synyx.urlaubsverwaltung.publicholiday;
 
-import de.focus_shift.HolidayManager;
+import de.focus_shift.jollyday.core.HolidayManager;
+import de.focus_shift.jollyday.core.ManagerParameters;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.settings.Settings;
 import org.synyx.urlaubsverwaltung.settings.SettingsService;
-import org.synyx.urlaubsverwaltung.workingtime.FederalState;
-import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeSettings;
 
 import java.math.BigDecimal;
 import java.net.URL;
@@ -20,14 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import static de.focus_shift.ManagerParameters.create;
 import static java.math.BigDecimal.ONE;
 import static java.math.BigDecimal.ZERO;
 import static java.time.LocalDate.of;
 import static java.time.Month.AUGUST;
 import static java.time.Month.DECEMBER;
 import static java.time.Month.MAY;
-import static java.time.Month.NOVEMBER;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.synyx.urlaubsverwaltung.workingtime.FederalState.GERMANY_BADEN_WUERTTEMBERG;
@@ -66,19 +65,21 @@ class PublicHolidaysServiceImplTest {
         assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(ZERO));
     }
 
-    @Test
-    void ensureWorkingDurationForChristmasEveCanBeConfiguredToAWorkingDurationOfFullDay() {
+    @ParameterizedTest
+    @CsvSource({"FULL, 1", "MORNING, 0.5", "NOON, 0.5", "ZERO, 0"})
+    void ensureWorkingDurationForChristmasEveCanBeConfiguredToAWorkingDurationOf(String dayLength, double workingDuration) {
 
         final Settings settings = new Settings();
-        settings.getWorkingTimeSettings().setWorkingDurationForChristmasEve(DayLength.FULL);
+        settings.getWorkingTimeSettings().setWorkingDurationForChristmasEve(DayLength.valueOf(dayLength));
         when(settingsService.getSettings()).thenReturn(settings);
 
         final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2013, DECEMBER, 24), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(ONE));
+        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(BigDecimal.valueOf(workingDuration)));
     }
 
-    @Test
-    void ensureWorkingDurationForNewYearsEveCanBeConfiguredToAWorkingDurationOfFullDay() {
+    @ParameterizedTest
+    @CsvSource({"FULL, 1", "MORNING, 0.5", "NOON, 0.5", "ZERO, 0"})
+    void ensureWorkingDurationForNewYearsEveCanBeConfiguredToAWorkingDurationOf(String dayLength, double workingDuration) {
 
         final Settings settings = new Settings();
         settings.getWorkingTimeSettings().setWorkingDurationForNewYearsEve(DayLength.FULL);
@@ -88,49 +89,6 @@ class PublicHolidaysServiceImplTest {
         assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(ONE));
     }
 
-    @Test
-    void ensureWorkingDurationForChristmasEveCanBeConfiguredToAWorkingDurationOfMorning() {
-
-        final Settings settings = new Settings();
-        settings.getWorkingTimeSettings().setWorkingDurationForChristmasEve(DayLength.MORNING);
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2013, DECEMBER, 24), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(BigDecimal.valueOf(0.5)));
-    }
-
-    @Test
-    void ensureWorkingDurationForNewYearsEveCanBeConfiguredToAWorkingDurationOfNoon() {
-
-        final Settings settings = new Settings();
-        settings.getWorkingTimeSettings().setWorkingDurationForNewYearsEve(DayLength.NOON);
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2013, DECEMBER, 31), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(BigDecimal.valueOf(0.5)));
-    }
-
-    @Test
-    void ensureWorkingDurationForChristmasEveCanBeConfiguredToAWorkingDurationOfZero() {
-
-        final Settings settings = new Settings();
-        settings.getWorkingTimeSettings().setWorkingDurationForChristmasEve(DayLength.ZERO);
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2013, DECEMBER, 24), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(ZERO));
-    }
-
-    @Test
-    void ensureWorkingDurationForNewYearsEveCanBeConfiguredToAWorkingDurationOfZero() {
-
-        final Settings settings = new Settings();
-        settings.getWorkingTimeSettings().setWorkingDurationForNewYearsEve(DayLength.ZERO);
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2013, DECEMBER, 31), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getWorkingDuration()).isEqualByComparingTo(ZERO));
-    }
 
     @Test
     void ensureCorrectWorkingDurationForAssumptionDayForBerlin() {
@@ -164,7 +122,7 @@ class PublicHolidaysServiceImplTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2019, MAY, 30), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.FULL));
+        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.dayLength()).isEqualTo(DayLength.FULL));
     }
 
     @Test
@@ -173,7 +131,7 @@ class PublicHolidaysServiceImplTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2019, AUGUST, 15), GERMANY_BAYERN_MUENCHEN);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.FULL));
+        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.dayLength()).isEqualTo(DayLength.FULL));
     }
 
     @Test
@@ -200,7 +158,7 @@ class PublicHolidaysServiceImplTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2019, DECEMBER, 24), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.NOON));
+        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.dayLength()).isEqualTo(DayLength.NOON));
     }
 
     @Test
@@ -209,7 +167,7 @@ class PublicHolidaysServiceImplTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Optional<PublicHoliday> maybePublicHoliday = sut.getPublicHoliday(of(2019, DECEMBER, 31), GERMANY_BADEN_WUERTTEMBERG);
-        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.NOON));
+        assertThat(maybePublicHoliday).hasValueSatisfying(publicHoliday -> assertThat(publicHoliday.dayLength()).isEqualTo(DayLength.NOON));
     }
 
     @Test
@@ -220,155 +178,13 @@ class PublicHolidaysServiceImplTest {
         final List<PublicHoliday> publicHolidays = sut.getPublicHolidays(of(2019, DECEMBER, 30), of(2019, DECEMBER, 31), GERMANY_BADEN_WUERTTEMBERG);
         assertThat(publicHolidays)
             .hasSize(1)
-            .extracting(p -> p.getDayLength()).containsExactly(DayLength.NOON);
+            .extracting(PublicHoliday::dayLength)
+            .containsExactly(DayLength.NOON);
     }
-
-    // CHRISTMAS EVE
-    //
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForChristmasEveMorning() {
-
-        final LocalDate christmasEveDate = LocalDate.of(2022, DECEMBER, 24);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForChristmasEve(DayLength.MORNING);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(christmasEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(christmasEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.NOON);
-        });
-    }
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForChristmasEveNoon() {
-
-        final LocalDate christmasEveDate = LocalDate.of(2022, DECEMBER, 24);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForChristmasEve(DayLength.NOON);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(christmasEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(christmasEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.MORNING);
-        });
-    }
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForChristmasEveFull() {
-
-        final LocalDate christmasEveDate = LocalDate.of(2022, DECEMBER, 24);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForChristmasEve(DayLength.FULL);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(christmasEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(christmasEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.ZERO);
-        });
-    }
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForChristmasEveZero() {
-
-        final LocalDate christmasEveDate = LocalDate.of(2022, DECEMBER, 24);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForChristmasEve(DayLength.ZERO);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(christmasEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(christmasEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.FULL);
-        });
-    }
-
-    // NEW YEARS EVE
-    //
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForNewYearsEveMorning() {
-
-        final LocalDate newYearsEveDate = LocalDate.of(2022, DECEMBER, 31);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForNewYearsEve(DayLength.MORNING);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(newYearsEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(newYearsEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.NOON);
-        });
-    }
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForNewYearsEveNoon() {
-
-        final LocalDate newYearsEveDate = LocalDate.of(2022, DECEMBER, 31);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForNewYearsEve(DayLength.NOON);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(newYearsEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(newYearsEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.MORNING);
-        });
-    }
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForNewYearsEveFull() {
-
-        final LocalDate newYearsEveDate = LocalDate.of(2022, DECEMBER, 31);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForNewYearsEve(DayLength.FULL);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(newYearsEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(newYearsEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.ZERO);
-        });
-    }
-
-    @Test
-    void ensurePublicHolidaysWithWorkingTimeSettingsForNewYearsEveZero() {
-
-        final LocalDate newYearsEveDate = LocalDate.of(2022, DECEMBER, 31);
-
-        final WorkingTimeSettings workingTimeSettings = new WorkingTimeSettings();
-        workingTimeSettings.setWorkingDurationForNewYearsEve(DayLength.ZERO);
-
-        final Optional<PublicHoliday> actual = sut.getPublicHoliday(newYearsEveDate, GERMANY_BADEN_WUERTTEMBERG, workingTimeSettings);
-
-        assertThat(actual).isPresent();
-        assertThat(actual.get()).satisfies(publicHoliday -> {
-            assertThat(publicHoliday.getDate()).isEqualTo(newYearsEveDate);
-            assertThat(publicHoliday.getDayLength()).isEqualTo(DayLength.FULL);
-        });
-    }
-
 
     private HolidayManager getHolidayManager() {
         final ClassLoader cl = Thread.currentThread().getContextClassLoader();
         final URL url = cl.getResource("Holidays_de.xml");
-        return HolidayManager.getInstance(create(url));
+        return HolidayManager.getInstance(ManagerParameters.create(url));
     }
 }

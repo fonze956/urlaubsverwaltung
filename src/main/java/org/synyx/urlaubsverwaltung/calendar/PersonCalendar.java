@@ -1,16 +1,20 @@
 package org.synyx.urlaubsverwaltung.calendar;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.validation.constraints.NotNull;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.hibernate.validator.constraints.Length;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import javax.persistence.Convert;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.OneToOne;
-import javax.validation.constraints.NotNull;
 import java.time.Period;
+
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 @Entity
 class PersonCalendar {
@@ -18,16 +22,20 @@ class PersonCalendar {
     private static final int SECRET_LENGTH = 32;
 
     @Id
-    @GeneratedValue
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "person_calendar_generator")
+    @SequenceGenerator(name = "person_calendar_generator", sequenceName = "person_calendar_id_seq")
     private Long id;
 
     @NotNull
     @OneToOne
     private Person person;
 
+    @NotNull
     @Length(min = SECRET_LENGTH, max = SECRET_LENGTH)
     private String secret;
 
+    @NotNull
     @Convert(converter = PeriodConverter.class)
     private Period calendarPeriod;
 

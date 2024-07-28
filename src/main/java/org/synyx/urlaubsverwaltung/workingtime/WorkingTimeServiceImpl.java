@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.synyx.urlaubsverwaltung.CachedSupplier;
 import org.synyx.urlaubsverwaltung.absence.DateRange;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
@@ -32,15 +33,13 @@ class WorkingTimeServiceImpl implements WorkingTimeService, WorkingTimeWriteServ
 
     private static final Logger LOG = getLogger(lookup().lookupClass());
 
-    private final WorkingTimeProperties workingTimeProperties;
     private final WorkingTimeRepository workingTimeRepository;
     private final SettingsService settingsService;
     private final Clock clock;
 
     @Autowired
-    public WorkingTimeServiceImpl(WorkingTimeProperties workingTimeProperties, WorkingTimeRepository workingTimeRepository,
+    public WorkingTimeServiceImpl(WorkingTimeRepository workingTimeRepository,
                                   SettingsService settingsService, Clock clock) {
-        this.workingTimeProperties = workingTimeProperties;
         this.workingTimeRepository = workingTimeRepository;
         this.settingsService = settingsService;
         this.clock = clock;
@@ -99,24 +98,24 @@ class WorkingTimeServiceImpl implements WorkingTimeService, WorkingTimeWriteServ
 
         final List<WorkingTime> workingTimesByPerson = toWorkingTimes(workingTimeRepository.findByPersonOrderByValidFromDesc(person));
         final List<WorkingTime> workingTimeList = workingTimesByPerson.stream()
-            .filter(workingTime -> !workingTime.getValidFrom().isAfter(dateRange.getEndDate()))
-            .collect(toList());
+            .filter(workingTime -> !workingTime.getValidFrom().isAfter(dateRange.endDate()))
+            .toList();
 
         final HashMap<DateRange, WorkingTime> workingTimesOfPersonByDateRange = new HashMap<>();
-        LocalDate nextEnd = dateRange.getEndDate();
+        LocalDate nextEnd = dateRange.endDate();
 
         for (WorkingTime workingTime : workingTimeList) {
 
             final DateRange range;
-            if (workingTime.getValidFrom().isBefore(dateRange.getStartDate())) {
-                range = new DateRange(dateRange.getStartDate(), nextEnd);
+            if (workingTime.getValidFrom().isBefore(dateRange.startDate())) {
+                range = new DateRange(dateRange.startDate(), nextEnd);
             } else {
                 range = new DateRange(workingTime.getValidFrom(), nextEnd);
             }
 
             workingTimesOfPersonByDateRange.put(range, workingTime);
 
-            if (!workingTime.getValidFrom().isAfter(dateRange.getStartDate())) {
+            if (!workingTime.getValidFrom().isAfter(dateRange.startDate())) {
                 return workingTimesOfPersonByDateRange;
             }
 
@@ -153,14 +152,7 @@ class WorkingTimeServiceImpl implements WorkingTimeService, WorkingTimeWriteServ
 
     @Override
     public void createDefaultWorkingTime(Person person) {
-        final List<Integer> defaultWorkingDays;
-
-        if (workingTimeProperties.isDefaultWorkingDaysDeactivated()) {
-            defaultWorkingDays = settingsService.getSettings().getWorkingTimeSettings().getWorkingDays();
-        } else {
-            defaultWorkingDays = workingTimeProperties.getDefaultWorkingDays();
-        }
-
+        final List<Integer> defaultWorkingDays = settingsService.getSettings().getWorkingTimeSettings().getWorkingDays();
         final LocalDate today = LocalDate.now(clock);
         this.touch(defaultWorkingDays, today.with(firstDayOfYear()), person);
     }
@@ -189,27 +181,13 @@ class WorkingTimeServiceImpl implements WorkingTimeService, WorkingTimeWriteServ
 
     private static void setWorkDay(WorkingTimeEntity workingTimeEntity, DayOfWeek dayOfWeek, DayLength dayLength) {
         switch (dayOfWeek) {
-            case MONDAY:
-                workingTimeEntity.setMonday(dayLength);
-                break;
-            case TUESDAY:
-                workingTimeEntity.setTuesday(dayLength);
-                break;
-            case WEDNESDAY:
-                workingTimeEntity.setWednesday(dayLength);
-                break;
-            case THURSDAY:
-                workingTimeEntity.setThursday(dayLength);
-                break;
-            case FRIDAY:
-                workingTimeEntity.setFriday(dayLength);
-                break;
-            case SATURDAY:
-                workingTimeEntity.setSaturday(dayLength);
-                break;
-            case SUNDAY:
-                workingTimeEntity.setSunday(dayLength);
-                break;
+            case MONDAY -> workingTimeEntity.setMonday(dayLength);
+            case TUESDAY -> workingTimeEntity.setTuesday(dayLength);
+            case WEDNESDAY -> workingTimeEntity.setWednesday(dayLength);
+            case THURSDAY -> workingTimeEntity.setThursday(dayLength);
+            case FRIDAY -> workingTimeEntity.setFriday(dayLength);
+            case SATURDAY -> workingTimeEntity.setSaturday(dayLength);
+            case SUNDAY -> workingTimeEntity.setSunday(dayLength);
         }
     }
 
@@ -229,22 +207,14 @@ class WorkingTimeServiceImpl implements WorkingTimeService, WorkingTimeWriteServ
     }
 
     private static DayLength dayLengthForDayOfWeek(WorkingTimeEntity workingTimeEntity, DayOfWeek dayOfWeek) {
-        switch (dayOfWeek) {
-            case MONDAY:
-                return workingTimeEntity.getMonday();
-            case TUESDAY:
-                return workingTimeEntity.getTuesday();
-            case WEDNESDAY:
-                return workingTimeEntity.getWednesday();
-            case THURSDAY:
-                return workingTimeEntity.getThursday();
-            case FRIDAY:
-                return workingTimeEntity.getFriday();
-            case SATURDAY:
-                return workingTimeEntity.getSaturday();
-            case SUNDAY:
-                return workingTimeEntity.getSunday();
-        }
-        return DayLength.ZERO;
+        return switch (dayOfWeek) {
+            case MONDAY -> workingTimeEntity.getMonday();
+            case TUESDAY -> workingTimeEntity.getTuesday();
+            case WEDNESDAY -> workingTimeEntity.getWednesday();
+            case THURSDAY -> workingTimeEntity.getThursday();
+            case FRIDAY -> workingTimeEntity.getFriday();
+            case SATURDAY -> workingTimeEntity.getSaturday();
+            case SUNDAY -> workingTimeEntity.getSunday();
+        };
     }
 }

@@ -1,4 +1,4 @@
-import { setup, cleanup, waitForFinishedJQueryReadyCallbacks } from "../../../../../test/javascript/test-setup-helper";
+import { cleanup, setup, waitForFinishedJQueryReadyCallbacks } from "../../../../../test/javascript/test-setup-helper";
 import fetchMock from "fetch-mock";
 
 describe("calendar", () => {
@@ -60,18 +60,21 @@ describe("calendar", () => {
         // personId -> createHolidayService (param)
         // year -> holidayService.fetchPersonal (param)
         // type -> holidayService.fetchPersonal (implementation detail)
-        fetchMock.mock("/persons/42/absences?from=2017-01-01&to=2017-12-31&noWorkdaysInclusive=true", {
-          absences: [
-            {
-              date: "2017-11-01",
-              dayLength: 1,
-              absencePeriodName: "FULL",
-              type: "VACATION",
-              status: givenStatus,
-              vacationTypeId: 1,
-            },
-          ],
-        });
+        fetchMock.mock(
+          "/persons/42/absences?from=2017-01-01&to=2017-12-31&absence-types=vacation%2Csick_note%2Cno_workday",
+          {
+            absences: [
+              {
+                date: "2017-11-01",
+                absenceType: "VACATION",
+                absent: "FULL",
+                absentNumeric: 1,
+                status: givenStatus,
+                typeId: 1,
+              },
+            ],
+          },
+        );
 
         await calendarTestSetup();
 
@@ -97,18 +100,21 @@ describe("calendar", () => {
         // personId -> createHolidayService (param)
         // year -> holidayService.fetchPersonal (param)
         // type -> holidayService.fetchPersonal (implementation detail)
-        fetchMock.mock("/persons/42/absences?from=2017-01-01&to=2017-12-31&noWorkdaysInclusive=true", {
-          absences: [
-            {
-              date: "2017-12-05",
-              dayLength: 1,
-              absencePeriodName: "FULL",
-              type: "VACATION",
-              status: givenStatus,
-              vacationTypeId: 1,
-            },
-          ],
-        });
+        fetchMock.mock(
+          "/persons/42/absences?from=2017-01-01&to=2017-12-31&absence-types=vacation%2Csick_note%2Cno_workday",
+          {
+            absences: [
+              {
+                date: "2017-12-05",
+                absenceType: "VACATION",
+                absent: "FULL",
+                absentNumeric: 1,
+                status: givenStatus,
+                typeId: 1,
+              },
+            ],
+          },
+        );
 
         await calendarTestSetup();
 
@@ -134,18 +140,21 @@ describe("calendar", () => {
         // personId -> createHolidayService (param)
         // year -> holidayService.fetchPersonal (param)
         // type -> holidayService.fetchPersonal (implementation detail)
-        fetchMock.mock("/persons/42/absences?from=2017-01-01&to=2017-12-31&noWorkdaysInclusive=true", {
-          absences: [
-            {
-              date: "2017-12-01",
-              dayLength: 1,
-              absencePeriodName: "FULL",
-              type: "VACATION",
-              status: givenStatus,
-              vacationTypeId: 1,
-            },
-          ],
-        });
+        fetchMock.mock(
+          "/persons/42/absences?from=2017-01-01&to=2017-12-31&absence-types=vacation%2Csick_note%2Cno_workday",
+          {
+            absences: [
+              {
+                date: "2017-12-01",
+                absenceType: "VACATION",
+                absent: "FULL",
+                absentNumeric: 1,
+                status: givenStatus,
+                typeId: 1,
+              },
+            ],
+          },
+        );
 
         await calendarTestSetup();
 
@@ -174,49 +183,52 @@ describe("calendar", () => {
       // personId -> createHolidayService (param)
       // year -> holidayService.fetchPersonal (param)
       // type -> holidayService.fetchPersonal (implementation detail)
-      fetchMock.mock("/persons/42/absences?from=2020-01-01&to=2020-12-31&noWorkdaysInclusive=true", {
-        absences: [
-          {
-            date: "2020-12-05",
-            absencePeriodName: "FULL",
-            type: "VACATION",
-            status: "ALLOWED",
-            vacationTypeId: 1,
-          },
-          {
-            date: "2020-12-06",
-            absencePeriodName: "MORNING",
-            type: "VACATION",
-            status: "ALLOWED",
-            vacationTypeId: 1,
-          },
-          {
-            date: "2020-12-06",
-            absencePeriodName: "NOON",
-            type: "SICK_NOTE",
-            status: "ACTIVE",
-          },
-          {
-            date: "2020-12-12",
-            absencePeriodName: "MORNING",
-            type: "SICK_NOTE",
-            status: "ACTIVE",
-          },
-          {
-            date: "2020-12-12",
-            absencePeriodName: "NOON",
-            type: "VACATION",
-            status: "ALLOWED",
-            vacationTypeId: 1,
-          },
-          {
-            date: "2020-12-13",
-            absencePeriodName: "FULL",
-            type: "SICK_NOTE",
-            status: "ACTIVE",
-          },
-        ],
-      });
+      fetchMock.mock(
+        "/persons/42/absences?from=2020-01-01&to=2020-12-31&absence-types=vacation%2Csick_note%2Cno_workday",
+        {
+          absences: [
+            {
+              date: "2020-12-05",
+              absent: "FULL",
+              absenceType: "VACATION",
+              status: "ALLOWED",
+              typeId: 1,
+            },
+            {
+              date: "2020-12-06",
+              absent: "MORNING",
+              absenceType: "VACATION",
+              status: "ALLOWED",
+              typeId: 1,
+            },
+            {
+              date: "2020-12-06",
+              absent: "NOON",
+              absenceType: "SICK_NOTE",
+              status: "ACTIVE",
+            },
+            {
+              date: "2020-12-12",
+              absent: "MORNING",
+              absenceType: "SICK_NOTE",
+              status: "ACTIVE",
+            },
+            {
+              date: "2020-12-12",
+              absent: "NOON",
+              absenceType: "VACATION",
+              status: "ALLOWED",
+              typeId: 1,
+            },
+            {
+              date: "2020-12-13",
+              absent: "FULL",
+              absenceType: "SICK_NOTE",
+              status: "ACTIVE",
+            },
+          ],
+        },
+      );
 
       await calendarTestSetup();
 
@@ -235,17 +247,17 @@ describe("calendar", () => {
       ).toBeTruthy();
       expect(
         $(
-          '[data-datepicker-date="2020-12-06"][class="datepicker-day datepicker-day-weekend datepicker-day-past datepicker-day-absence-morning absence-morning--solid datepicker-day-sick-note-noon"]',
+          '[data-datepicker-date="2020-12-06"][class="datepicker-day datepicker-day-weekend datepicker-day-past datepicker-day-absence-morning absence-morning--solid datepicker-day-sick-note-noon absence-noon--solid"]',
         ),
       ).toBeTruthy();
       expect(
         $(
-          '[data-datepicker-date="2020-12-12"][class="datepicker-day datepicker-day-weekend datepicker-day-past datepicker-day-absence-noon absence-noon--solid datepicker-day-sick-note-morning"]',
+          '[data-datepicker-date="2020-12-12"][class="datepicker-day datepicker-day-weekend datepicker-day-past datepicker-day-absence-noon absence-noon--solid datepicker-day-sick-note-morning absence-morning--solid"]',
         ),
       ).toBeTruthy();
       expect(
         $(
-          '[data-datepicker-date="2020-12-13"][class="datepicker-day datepicker-day-today datepicker-day-weekend datepicker-day-sick-note-full"]',
+          '[data-datepicker-date="2020-12-13"][class="datepicker-day datepicker-day-today datepicker-day-weekend datepicker-day-sick-note-full absence-full--solid"]',
         ),
       ).toBeTruthy();
     });
@@ -258,31 +270,34 @@ describe("calendar", () => {
     // personId -> createHolidayService (param)
     // year -> holidayService.fetchPersonal (param)
     // type -> holidayService.fetchPersonal (implementation detail)
-    fetchMock.mock("/persons/42/absences?from=2020-01-01&to=2020-12-31&noWorkdaysInclusive=true", {
-      absences: [
-        {
-          // saturday
-          date: "2020-12-05",
-          absencePeriodName: "FULL",
-          type: "NO_WORKDAY",
-          status: "",
-        },
-        {
-          // sunday
-          date: "2020-12-06",
-          absencePeriodName: "FULL",
-          type: "NO_WORKDAY",
-          status: "",
-        },
-        {
-          // wednesday
-          date: "2020-12-09",
-          absencePeriodName: "FULL",
-          type: "NO_WORKDAY",
-          status: "",
-        },
-      ],
-    });
+    fetchMock.mock(
+      "/persons/42/absences?from=2020-01-01&to=2020-12-31&absence-types=vacation%2Csick_note%2Cno_workday",
+      {
+        absences: [
+          {
+            // saturday
+            date: "2020-12-05",
+            absent: "FULL",
+            absenceType: "NO_WORKDAY",
+            status: "",
+          },
+          {
+            // sunday
+            date: "2020-12-06",
+            absent: "FULL",
+            absenceType: "NO_WORKDAY",
+            status: "",
+          },
+          {
+            // wednesday
+            date: "2020-12-09",
+            absent: "FULL",
+            absenceType: "NO_WORKDAY",
+            status: "",
+          },
+        ],
+      },
+    );
 
     await calendarTestSetup();
 

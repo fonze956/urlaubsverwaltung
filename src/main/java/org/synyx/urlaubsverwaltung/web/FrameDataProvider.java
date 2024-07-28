@@ -1,18 +1,19 @@
 package org.synyx.urlaubsverwaltung.web;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 import org.synyx.urlaubsverwaltung.overtime.OvertimeSettings;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
+import org.synyx.urlaubsverwaltung.settings.Settings;
 import org.synyx.urlaubsverwaltung.settings.SettingsService;
+import org.synyx.urlaubsverwaltung.sicknote.settings.SickNoteSettings;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Objects;
 
@@ -27,7 +28,7 @@ import static org.synyx.urlaubsverwaltung.person.Role.SICK_NOTE_VIEW;
  * Interceptor to add menu specific information to all requests
  */
 @Component
-public class FrameDataProvider implements HandlerInterceptor {
+public class FrameDataProvider implements DataProviderInterface {
 
     private final PersonService personService;
     private final SettingsService settingsService;
@@ -46,7 +47,7 @@ public class FrameDataProvider implements HandlerInterceptor {
     @Override
     public void postHandle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler, ModelAndView modelAndView) {
 
-        if (modelAndView != null && menuIsShown(modelAndView)) {
+        if (addDataIf(modelAndView)) {
 
             final Person signedInUserInModel = (Person) modelAndView.getModelMap().get("signedInUser");
             final Person user = Objects.requireNonNullElseGet(signedInUserInModel, personService::getSignedInUser);
@@ -61,69 +62,65 @@ public class FrameDataProvider implements HandlerInterceptor {
             modelAndView.addObject("menuGravatarUrl", gravatarUrl);
             modelAndView.addObject("menuHelpUrl", menuProperties.getHelp().getUrl());
 
-            modelAndView.addObject("navigation", createNavigation(user));
-            modelAndView.addObject("navigationRequestPopupEnabled", popupMenuEnabled(user));
-            modelAndView.addObject("navigationSickNoteAddAccess", user.hasRole(OFFICE) || user.hasRole(SICK_NOTE_ADD));
-            modelAndView.addObject("navigationOvertimeItemEnabled", overtimeEnabled(user));
-            modelAndView.addObject("gravatarEnabled", settingsService.getSettings().getAvatarSettings().isGravatarEnabled());
+            final Settings settings = settingsService.getSettings();
+            modelAndView.addObject("navigation", createNavigation(user, settings));
+            modelAndView.addObject("navigationRequestPopupEnabled", popupMenuEnabled(user, settings));
+            modelAndView.addObject("navigationSickNoteAddAccess", isAllowedToAddOrSubmitSickNote(user, settings.getSickNoteSettings()));
+            modelAndView.addObject("navigationOvertimeAddAccess", isUserAllowedToWriteOvertime(user, settings.getOvertimeSettings()));
+            modelAndView.addObject("gravatarEnabled", settings.getAvatarSettings().isGravatarEnabled());
         }
     }
 
-    private NavigationDto createNavigation(Person user) {
+    private NavigationDto createNavigation(Person user, Settings settings) {
 
         final ArrayList<NavigationItemDto> elements = new ArrayList<>();
 
         elements.add(new NavigationItemDto("home-link", "/web/overview", "nav.home.title", "home"));
-        elements.add(new NavigationItemDto("application-new-link", "/web/application/new", "nav.apply.title", "plus-circle"));
         elements.add(new NavigationItemDto("application-link", "/web/application", "nav.vacation.title", "calendar"));
 
-        final boolean overtime = overtimeEnabled(user);
-        if (overtime) {
-            elements.add(new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "briefcase"));
+        final boolean overtimeIsEnabled = overtimeEnabled(settings.getOvertimeSettings());
+        if (overtimeIsEnabled) {
+            elements.add(new NavigationItemDto("overtime-link", "/web/overtime", "nav.overtime.title", "clock"));
         }
 
-        final boolean sickNote = user.hasRole(OFFICE) || user.hasRole(SICK_NOTE_VIEW);
-        if (sickNote) {
+        final boolean canViewSickNotes = user.hasRole(OFFICE) || user.hasRole(SICK_NOTE_VIEW);
+        if (canViewSickNotes) {
             elements.add(new NavigationItemDto("sicknote-link", "/web/sickdays", "nav.sicknote.title", "medkit", "navigation-sick-notes-link"));
         }
 
-        final boolean person = user.hasRole(OFFICE) || user.hasRole(BOSS) || user.hasRole(DEPARTMENT_HEAD) || user.hasRole(SECOND_STAGE_AUTHORITY);
-        if (person) {
+        final boolean canViewPersons = user.hasRole(OFFICE) || user.hasRole(BOSS) || user.hasRole(DEPARTMENT_HEAD) || user.hasRole(SECOND_STAGE_AUTHORITY);
+        if (canViewPersons) {
             elements.add(new NavigationItemDto("person-link", "/web/person", "nav.person.title", "user"));
         }
 
-        final boolean department = user.hasRole(OFFICE) || user.hasRole(BOSS);
-        if (department) {
+        final boolean canViewDepartments = user.hasRole(OFFICE) || user.hasRole(BOSS);
+        if (canViewDepartments) {
             elements.add(new NavigationItemDto("department-link", "/web/department", "nav.department.title", "users"));
         }
 
-        final boolean settings = user.hasRole(OFFICE);
-        if (settings) {
+        final boolean canViewSettings = user.hasRole(OFFICE);
+        if (canViewSettings) {
             elements.add(new NavigationItemDto("settings-link", "/web/settings", "nav.settings.title", "settings", "navigation-settings-link"));
         }
 
         return new NavigationDto(elements);
     }
 
-    private boolean menuIsShown(ModelAndView modelAndView) {
-
-        final String viewName = modelAndView.getViewName();
-        if (viewName == null) {
-            return false;
-        }
-
-        return !viewName.startsWith("forward:")
-            && !viewName.startsWith("redirect:")
-            && !viewName.startsWith("login");
+    private boolean popupMenuEnabled(Person signedInUser, Settings settings) {
+        return signedInUser.hasRole(OFFICE) || isUserAllowedToWriteOvertime(signedInUser, settings.getOvertimeSettings()) || isAllowedToAddOrSubmitSickNote(signedInUser, settings.getSickNoteSettings());
     }
 
-    private boolean popupMenuEnabled(Person signedInUser) {
-        return signedInUser.hasRole(OFFICE) || overtimeEnabled(signedInUser);
+    private boolean overtimeEnabled(OvertimeSettings overtimeSettings) {
+        return overtimeSettings.isOvertimeActive();
     }
 
-    private boolean overtimeEnabled(Person signedInUser) {
-        final OvertimeSettings overtimeSettings = settingsService.getSettings().getOvertimeSettings();
+    private boolean isUserAllowedToWriteOvertime(Person signedInUser, OvertimeSettings overtimeSettings) {
         boolean userIsAllowedToWriteOvertime = !overtimeSettings.isOvertimeWritePrivilegedOnly() || signedInUser.isPrivileged();
         return overtimeSettings.isOvertimeActive() && userIsAllowedToWriteOvertime;
+    }
+
+    private boolean isAllowedToAddOrSubmitSickNote(Person user, SickNoteSettings sickNoteSettings) {
+        var userIsAllowedToSubmitSickNotes = sickNoteSettings.getUserIsAllowedToSubmitSickNotes();
+        return user.hasRole(OFFICE) || user.hasRole(SICK_NOTE_ADD) || userIsAllowedToSubmitSickNotes;
     }
 }

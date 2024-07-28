@@ -1,30 +1,38 @@
 package org.synyx.urlaubsverwaltung.application.specialleave;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
+import jakarta.validation.constraints.NotNull;
+
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 @Entity(name = "special_leave_settings")
 class SpecialLeaveSettingsEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id;
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "special_leaves_settings_generator")
+    @SequenceGenerator(name = "special_leaves_settings_generator", sequenceName = "special_leave_settings_id_seq")
+    private Long id;
 
     private boolean active;
+    @NotNull
     private String messageKey;
+    @NotNull
     private Integer days;
 
     protected SpecialLeaveSettingsEntity() {
         // ok
     }
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

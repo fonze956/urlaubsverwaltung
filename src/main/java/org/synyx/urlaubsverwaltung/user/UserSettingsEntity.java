@@ -1,20 +1,20 @@
 package org.synyx.urlaubsverwaltung.user;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrimaryKeyJoinColumn;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotNull;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Enumerated;
-import javax.persistence.Id;
-import javax.persistence.OneToOne;
-import javax.persistence.PrimaryKeyJoinColumn;
-import javax.persistence.Table;
-import javax.validation.constraints.NotNull;
 import java.util.Locale;
 import java.util.Objects;
 
-import static javax.persistence.EnumType.STRING;
-import static javax.persistence.FetchType.LAZY;
+import static jakarta.persistence.EnumType.STRING;
+import static jakarta.persistence.FetchType.LAZY;
 
 @Entity
 @Table(name = "user_settings")
@@ -22,7 +22,7 @@ class UserSettingsEntity {
 
     @Id
     @Column(name = "person_id")
-    private Integer personId;
+    private Long personId;
 
     @OneToOne(fetch = LAZY)
     @PrimaryKeyJoinColumn(name = "person_id", referencedColumnName = "id")
@@ -36,11 +36,11 @@ class UserSettingsEntity {
 
     private Locale localeBrowserSpecific;
 
-    public Integer getPersonId() {
+    public Long getPersonId() {
         return personId;
     }
 
-    public void setPersonId(Integer personId) {
+    public void setPersonId(Long personId) {
         this.personId = personId;
     }
 

@@ -83,13 +83,10 @@ public class PersonsViewController implements HasLaunchpad {
     @PreAuthorize(IS_PRIVILEGED_USER)
     @GetMapping("/person")
     public String showPerson(@RequestParam(value = "active", required = false, defaultValue = "true") boolean active,
-                             @RequestParam(value = "department", required = false) Optional<Integer> requestedDepartmentId,
+                             @RequestParam(value = "department", required = false) Optional<Long> requestedDepartmentId,
                              @RequestParam(value = "year", required = false) Optional<Integer> requestedYear,
                              @RequestParam(value = "query", required = false, defaultValue = "") String query,
-                             @SortDefault.SortDefaults({
-                                 @SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC)
-                             })
-                             Pageable pageable,
+                             @SortDefault(sort = "person.firstName", direction = Sort.Direction.ASC) Pageable pageable,
                              Model model) throws UnknownDepartmentException {
 
         final int currentYear = Year.now(clock).getValue();
@@ -116,7 +113,7 @@ public class PersonsViewController implements HasLaunchpad {
         Page<Person> personPage = null;
 
         if (requestedDepartmentId.isPresent()) {
-            final Integer departmentId = requestedDepartmentId.get();
+            final Long departmentId = requestedDepartmentId.get();
             final Department department = departmentService.getDepartmentById(departmentId)
                 .orElseThrow(() -> new UnknownDepartmentException(departmentId));
 

@@ -5,22 +5,33 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
+import org.synyx.urlaubsverwaltung.settings.Settings;
+import org.synyx.urlaubsverwaltung.settings.SettingsService;
+import org.synyx.urlaubsverwaltung.sicknote.settings.SickNoteSettings;
+import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNote;
+import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteService;
+import org.synyx.urlaubsverwaltung.sicknote.sicknotetype.SickNoteType;
 import org.synyx.urlaubsverwaltung.workingtime.WorkDaysCountService;
+import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.contains;
@@ -47,7 +58,11 @@ import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
 import static org.synyx.urlaubsverwaltung.person.Role.OFFICE;
 import static org.synyx.urlaubsverwaltung.person.Role.SECOND_STAGE_AUTHORITY;
+import static org.synyx.urlaubsverwaltung.person.Role.SICK_NOTE_EDIT;
 import static org.synyx.urlaubsverwaltung.person.Role.USER;
+import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteCategory.SICK_NOTE;
+import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteStatus.SUBMITTED;
+import static org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation.WorkingTimeCalendarEntryType.WORKDAY;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicationForLeaveViewControllerTest {
@@ -57,11 +72,16 @@ class ApplicationForLeaveViewControllerTest {
     @Mock
     private ApplicationService applicationService;
     @Mock
+
+    private SickNoteService sickNoteService;
+    @Mock
     private WorkDaysCountService workDaysCountService;
     @Mock
     private DepartmentService departmentService;
     @Mock
     private PersonService personService;
+    @Mock
+    private SettingsService settingsService;
     @Mock
     private MessageSource messageSource;
 
@@ -69,20 +89,22 @@ class ApplicationForLeaveViewControllerTest {
 
     @BeforeEach
     void setUp() {
-        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
-        sut = new ApplicationForLeaveViewController(applicationService, workDaysCountService, departmentService,
-            personService, clock, messageSource);
+        userIsAllowedToSubmitSickNotes(false);
+
+        sut = new ApplicationForLeaveViewController(applicationService, sickNoteService, workDaysCountService, departmentService,
+            personService, settingsService, clock, messageSource);
     }
 
     @Test
     void getApplicationForUser() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person userPerson = new Person();
         userPerson.setFirstName("person");
         userPerson.setPermissions(List.of(USER));
         final Application applicationOfUser = new Application();
-        applicationOfUser.setId(3);
+        applicationOfUser.setId(3L);
         applicationOfUser.setVacationType(anyVacationType());
         applicationOfUser.setPerson(userPerson);
         applicationOfUser.setStatus(WAITING);
@@ -90,7 +112,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfUser.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(userPerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -104,21 +126,22 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(userPerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(false)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(false)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(false)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(false)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(2)))
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(3)),
+                    hasProperty("id", is(3L)),
                     hasProperty("person",
                         hasProperty("name", equalTo("person"))
                     )
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true))
                 ))
             ))
@@ -130,10 +153,11 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForBoss() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(WAITING);
@@ -144,7 +168,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person bossPerson = new Person();
         bossPerson.setPermissions(List.of(BOSS));
         final Application applicationOfBoss = new Application();
-        applicationOfBoss.setId(2);
+        applicationOfBoss.setId(2L);
         applicationOfBoss.setVacationType(anyVacationType());
         applicationOfBoss.setPerson(bossPerson);
         applicationOfBoss.setStatus(WAITING);
@@ -156,7 +180,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person secondStagePerson = new Person();
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStatus(WAITING);
@@ -164,7 +188,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfSecondStage.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(bossPerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -182,20 +206,21 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(bossPerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(false)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(2)))
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true)),
                     hasProperty("cancelAllowed", is(false))
                 ))
@@ -204,12 +229,12 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("cancelAllowed", is(false))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(3)),
+                    hasProperty("id", is(3L)),
                     hasProperty("cancelAllowed", is(false))
                 ))
             ))
@@ -220,10 +245,11 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForBossWithCancellationRequested() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(WAITING);
@@ -234,7 +260,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person secondStagePerson = new Person();
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStatus(WAITING);
@@ -245,7 +271,7 @@ class ApplicationForLeaveViewControllerTest {
             .thenReturn(List.of(application, applicationOfSecondStage));
 
         final Application applicationCancellationRequestPerson = new Application();
-        applicationCancellationRequestPerson.setId(11);
+        applicationCancellationRequestPerson.setId(11L);
         applicationCancellationRequestPerson.setVacationType(anyVacationType());
         applicationCancellationRequestPerson.setPerson(secondStagePerson);
         applicationCancellationRequestPerson.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -262,7 +288,7 @@ class ApplicationForLeaveViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(bossPerson);
 
         final Application applicationOfBoss = new Application();
-        applicationOfBoss.setId(2);
+        applicationOfBoss.setId(2L);
         applicationOfBoss.setVacationType(anyVacationType());
         applicationOfBoss.setPerson(bossPerson);
         applicationOfBoss.setStatus(WAITING);
@@ -270,7 +296,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfBoss.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(bossPerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -284,20 +310,21 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(bossPerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(true)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(2)))
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true)),
                     hasProperty("cancelAllowed", is(false))
                 ))
@@ -306,12 +333,12 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("cancelAllowed", is(false))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(3)),
+                    hasProperty("id", is(3L)),
                     hasProperty("cancelAllowed", is(false))
                 ))
             ))
@@ -319,7 +346,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("applications_cancellation_request", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(11))
+                    hasProperty("id", is(11L))
                 )
             )))
             .andExpect(model().attribute("applications_holiday_replacements", hasSize(0)))
@@ -328,10 +355,11 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForOffice() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(TEMPORARY_ALLOWED);
@@ -342,7 +370,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person officePerson = new Person();
         officePerson.setPermissions(List.of(OFFICE));
         final Application applicationOfOfficePerson = new Application();
-        applicationOfOfficePerson.setId(2);
+        applicationOfOfficePerson.setId(2L);
         applicationOfOfficePerson.setVacationType(anyVacationType());
         applicationOfOfficePerson.setPerson(officePerson);
         applicationOfOfficePerson.setStatus(WAITING);
@@ -354,7 +382,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person secondStagePerson = new Person();
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStatus(WAITING);
@@ -362,7 +390,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfSecondStage.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(person);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -383,14 +411,15 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(officePerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(true)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(1)))
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 )
@@ -400,13 +429,13 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(3)),
+                    hasProperty("id", is(3L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 )
@@ -415,7 +444,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("applications_cancellation_request", hasItem(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true))
                 )
             )))
@@ -425,12 +454,13 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForDepartmentHead() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("Atticus");
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(WAITING);
@@ -439,10 +469,10 @@ class ApplicationForLeaveViewControllerTest {
         application.setDayLength(FULL);
 
         final Person headPerson = new Person();
-        headPerson.setId(2);
+        headPerson.setId(2L);
         headPerson.setPermissions(List.of(DEPARTMENT_HEAD));
         final Application applicationOfHead = new Application();
-        applicationOfHead.setId(2);
+        applicationOfHead.setId(2L);
         applicationOfHead.setVacationType(anyVacationType());
         applicationOfHead.setPerson(headPerson);
         applicationOfHead.setStatus(WAITING);
@@ -452,17 +482,17 @@ class ApplicationForLeaveViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(headPerson);
 
         final Person secondStagePerson = new Person();
-        secondStagePerson.setId(3);
+        secondStagePerson.setId(3L);
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStartDate(LocalDate.MAX);
         applicationOfSecondStage.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(headPerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -482,20 +512,21 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(headPerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(false)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(2)))
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true)),
                     hasProperty("cancelAllowed", is(false))
                 )
@@ -510,12 +541,13 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForDepartmentHeadWithCancellationRequested() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("Atticus");
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(WAITING);
@@ -524,7 +556,7 @@ class ApplicationForLeaveViewControllerTest {
         application.setDayLength(FULL);
 
         final Application applicationCancellationRequestPerson = new Application();
-        applicationCancellationRequestPerson.setId(11);
+        applicationCancellationRequestPerson.setId(11L);
         applicationCancellationRequestPerson.setVacationType(anyVacationType());
         applicationCancellationRequestPerson.setPerson(person);
         applicationCancellationRequestPerson.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -533,10 +565,10 @@ class ApplicationForLeaveViewControllerTest {
         applicationCancellationRequestPerson.setDayLength(FULL);
 
         final Person headPerson = new Person();
-        headPerson.setId(2);
+        headPerson.setId(2L);
         headPerson.setPermissions(List.of(DEPARTMENT_HEAD, APPLICATION_CANCELLATION_REQUESTED));
         final Application applicationOfHead = new Application();
-        applicationOfHead.setId(2);
+        applicationOfHead.setId(2L);
         applicationOfHead.setVacationType(anyVacationType());
         applicationOfHead.setPerson(headPerson);
         applicationOfHead.setStatus(WAITING);
@@ -546,17 +578,17 @@ class ApplicationForLeaveViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(headPerson);
 
         final Person secondStagePerson = new Person();
-        secondStagePerson.setId(3);
+        secondStagePerson.setId(3L);
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStartDate(LocalDate.MAX);
         applicationOfSecondStage.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(headPerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -579,20 +611,21 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(headPerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(true)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(2)))
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true)),
                     hasProperty("cancelAllowed", is(false))
                 )
@@ -604,7 +637,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("applications_cancellation_request", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(11))
+                    hasProperty("id", is(11L))
                 )
             )))
             .andExpect(model().attribute("applications_holiday_replacements", hasSize(0)))
@@ -613,11 +646,12 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForSecondStage() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
         person.setFirstName("person");
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(TEMPORARY_ALLOWED);
@@ -629,7 +663,7 @@ class ApplicationForLeaveViewControllerTest {
         officePerson.setFirstName("office");
         officePerson.setPermissions(List.of(OFFICE));
         final Application applicationOfBoss = new Application();
-        applicationOfBoss.setId(2);
+        applicationOfBoss.setId(2L);
         applicationOfBoss.setVacationType(anyVacationType());
         applicationOfBoss.setPerson(officePerson);
         applicationOfBoss.setStatus(WAITING);
@@ -639,7 +673,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person secondStagePerson = new Person();
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStatus(WAITING);
@@ -647,7 +681,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfSecondStage.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(secondStagePerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -670,14 +704,15 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(secondStagePerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(false)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(1)))
             .andExpect(model().attribute("userApplications", hasItem(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true)),
                     hasProperty("cancelAllowed", is(false)),
                     hasProperty("approveAllowed", is(false))
@@ -689,14 +724,14 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(false)),
                     hasProperty("approveAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(false)),
                     hasProperty("approveAllowed", is(true))
@@ -709,11 +744,12 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForSecondStageWithCancellationRequested() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
         person.setFirstName("person");
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(TEMPORARY_ALLOWED);
@@ -722,7 +758,7 @@ class ApplicationForLeaveViewControllerTest {
         application.setDayLength(FULL);
 
         final Application applicationCancellationRequestPerson = new Application();
-        applicationCancellationRequestPerson.setId(11);
+        applicationCancellationRequestPerson.setId(11L);
         applicationCancellationRequestPerson.setVacationType(anyVacationType());
         applicationCancellationRequestPerson.setPerson(person);
         applicationCancellationRequestPerson.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -734,7 +770,7 @@ class ApplicationForLeaveViewControllerTest {
         officePerson.setFirstName("office");
         officePerson.setPermissions(List.of(OFFICE));
         final Application applicationOfBoss = new Application();
-        applicationOfBoss.setId(2);
+        applicationOfBoss.setId(2L);
         applicationOfBoss.setVacationType(anyVacationType());
         applicationOfBoss.setPerson(officePerson);
         applicationOfBoss.setStatus(WAITING);
@@ -744,7 +780,7 @@ class ApplicationForLeaveViewControllerTest {
         final Person secondStagePerson = new Person();
         secondStagePerson.setPermissions(List.of(SECOND_STAGE_AUTHORITY, APPLICATION_CANCELLATION_REQUESTED));
         final Application applicationOfSecondStage = new Application();
-        applicationOfSecondStage.setId(3);
+        applicationOfSecondStage.setId(3L);
         applicationOfSecondStage.setVacationType(anyVacationType());
         applicationOfSecondStage.setPerson(secondStagePerson);
         applicationOfSecondStage.setStatus(WAITING);
@@ -752,7 +788,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfSecondStage.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(secondStagePerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -778,14 +814,15 @@ class ApplicationForLeaveViewControllerTest {
 
         perform(get("/web/application")).andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(secondStagePerson)))
-            .andExpect(model().attribute("canAddApplicationForAnotherUser", is(true)))
             .andExpect(model().attribute("canAccessApplicationStatistics", is(true)))
             .andExpect(model().attribute("canAccessCancellationRequests", is(true)))
+            .andExpect(model().attribute("canAccessOtherApplications", is(true)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(false)))
             .andExpect(model().attribute("userApplications", hasSize(1)))
             .andExpect(model().attribute("userApplications", hasItem(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true)),
                     hasProperty("cancelAllowed", is(false)),
                     hasProperty("approveAllowed", is(false))
@@ -797,14 +834,14 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(false)),
                     hasProperty("approveAllowed", is(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("cancellationRequested", is(false)),
                     hasProperty("cancelAllowed", is(false)),
                     hasProperty("approveAllowed", is(true))
@@ -814,7 +851,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("applications_cancellation_request", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(11))
+                    hasProperty("id", is(11L))
                 )
             )))
             .andExpect(model().attribute("applications_holiday_replacements", hasSize(0)))
@@ -823,20 +860,21 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void departmentHeadAndSecondStageAuthorityOfDifferentDepartmentsGrantsApplications() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person departmentHeadAndSecondStageAuth = new Person();
-        departmentHeadAndSecondStageAuth.setId(1);
+        departmentHeadAndSecondStageAuth.setId(1L);
         departmentHeadAndSecondStageAuth.setFirstName("departmentHeadAndSecondStageAuth");
         departmentHeadAndSecondStageAuth.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY));
 
         when(personService.getSignedInUser()).thenReturn(departmentHeadAndSecondStageAuth);
 
         final Person userOfDepartmentA = new Person();
-        userOfDepartmentA.setId(2);
+        userOfDepartmentA.setId(2L);
         userOfDepartmentA.setFirstName("userOfDepartmentA");
         userOfDepartmentA.setPermissions(List.of(USER));
         final Application applicationOfUserA = new Application();
-        applicationOfUserA.setId(1);
+        applicationOfUserA.setId(1L);
         applicationOfUserA.setVacationType(anyVacationType());
         applicationOfUserA.setPerson(userOfDepartmentA);
         applicationOfUserA.setStatus(TEMPORARY_ALLOWED);
@@ -844,11 +882,11 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfUserA.setEndDate(LocalDate.MAX);
 
         final Person userOfDepartmentB = new Person();
-        userOfDepartmentB.setId(3);
+        userOfDepartmentB.setId(3L);
         userOfDepartmentB.setFirstName("userOfDepartmentB");
         userOfDepartmentB.setPermissions(List.of(USER));
         final Application applicationOfUserB = new Application();
-        applicationOfUserB.setId(2);
+        applicationOfUserB.setId(2L);
         applicationOfUserB.setVacationType(anyVacationType());
         applicationOfUserB.setPerson(userOfDepartmentB);
         applicationOfUserB.setStatus(WAITING);
@@ -856,7 +894,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfUserB.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(departmentHeadAndSecondStageAuth);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -887,7 +925,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("userApplications", hasItem(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(10)),
+                    hasProperty("id", is(10L)),
                     hasProperty("cancellationRequested", is(true))
                 ))
             ))
@@ -912,19 +950,20 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void departmentHeadAndSecondStageAuthorityOfDifferentDepartmentsGrantsApplicationsWithCancellationRequested() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person departmentHeadAndSecondStageAuth = new Person();
-        departmentHeadAndSecondStageAuth.setId(1);
+        departmentHeadAndSecondStageAuth.setId(1L);
         departmentHeadAndSecondStageAuth.setFirstName("departmentHeadAndSecondStageAuth");
         departmentHeadAndSecondStageAuth.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY, APPLICATION_CANCELLATION_REQUESTED));
         when(personService.getSignedInUser()).thenReturn(departmentHeadAndSecondStageAuth);
 
         final Person userOfDepartmentA = new Person();
-        userOfDepartmentA.setId(2);
+        userOfDepartmentA.setId(2L);
         userOfDepartmentA.setFirstName("userOfDepartmentA");
         userOfDepartmentA.setPermissions(List.of(USER));
         final Application applicationOfUserA = new Application();
-        applicationOfUserA.setId(1);
+        applicationOfUserA.setId(1L);
         applicationOfUserA.setVacationType(anyVacationType());
         applicationOfUserA.setPerson(userOfDepartmentA);
         applicationOfUserA.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -932,11 +971,11 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfUserA.setEndDate(LocalDate.MAX);
 
         final Person userOfDepartmentB = new Person();
-        userOfDepartmentB.setId(3);
+        userOfDepartmentB.setId(3L);
         userOfDepartmentB.setFirstName("userOfDepartmentB");
         userOfDepartmentB.setPermissions(List.of(USER));
         final Application applicationOfUserB = new Application();
-        applicationOfUserB.setId(2);
+        applicationOfUserB.setId(2L);
         applicationOfUserB.setVacationType(anyVacationType());
         applicationOfUserB.setPerson(userOfDepartmentB);
         applicationOfUserB.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -944,7 +983,7 @@ class ApplicationForLeaveViewControllerTest {
         applicationOfUserB.setEndDate(LocalDate.MAX);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(departmentHeadAndSecondStageAuth);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -971,14 +1010,14 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("applications_cancellation_request", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("person",
                         hasProperty("name", equalTo("userOfDepartmentA"))
                     )
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(2)),
+                    hasProperty("id", is(2L)),
                     hasProperty("person",
                         hasProperty("name", equalTo("userOfDepartmentB"))
                     )
@@ -988,20 +1027,21 @@ class ApplicationForLeaveViewControllerTest {
     }
 
     @Test
-    void ensureDistinceCancellationRequests() throws Exception {
+    void ensureDistinctCancellationRequests() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person departmentHeadAndSecondStageAuth = new Person();
-        departmentHeadAndSecondStageAuth.setId(1);
+        departmentHeadAndSecondStageAuth.setId(1L);
         departmentHeadAndSecondStageAuth.setFirstName("departmentHeadAndSecondStageAuth");
         departmentHeadAndSecondStageAuth.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY, APPLICATION_CANCELLATION_REQUESTED));
         when(personService.getSignedInUser()).thenReturn(departmentHeadAndSecondStageAuth);
 
         final Person userOfDepartmentA = new Person();
-        userOfDepartmentA.setId(2);
+        userOfDepartmentA.setId(2L);
         userOfDepartmentA.setFirstName("userOfDepartmentA");
         userOfDepartmentA.setPermissions(List.of(USER));
         final Application applicationOfUserA = new Application();
-        applicationOfUserA.setId(1);
+        applicationOfUserA.setId(1L);
         applicationOfUserA.setVacationType(anyVacationType());
         applicationOfUserA.setPerson(userOfDepartmentA);
         applicationOfUserA.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -1027,7 +1067,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("applications_cancellation_request", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("person",
                         hasProperty("name", equalTo("userOfDepartmentA"))
                     )
@@ -1038,6 +1078,7 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void departmentHeadAndSecondStageAuthorityOfSameDepartmentsGrantsApplications() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person departmentHeadAndSecondStageAuth = new Person();
         departmentHeadAndSecondStageAuth.setFirstName("departmentHeadAndSecondStageAuth");
@@ -1049,7 +1090,7 @@ class ApplicationForLeaveViewControllerTest {
         userOfDepartment.setPermissions(List.of(USER));
 
         final Application temporaryAllowedApplication = new Application();
-        temporaryAllowedApplication.setId(1);
+        temporaryAllowedApplication.setId(1L);
         temporaryAllowedApplication.setVacationType(anyVacationType());
         temporaryAllowedApplication.setPerson(userOfDepartment);
         temporaryAllowedApplication.setStatus(TEMPORARY_ALLOWED);
@@ -1057,7 +1098,7 @@ class ApplicationForLeaveViewControllerTest {
         temporaryAllowedApplication.setEndDate(LocalDate.MAX);
 
         final Application waitingApplication = new Application();
-        waitingApplication.setId(2);
+        waitingApplication.setId(2L);
         waitingApplication.setVacationType(anyVacationType());
         waitingApplication.setPerson(userOfDepartment);
         waitingApplication.setStatus(WAITING);
@@ -1097,12 +1138,13 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void ensureOvertimeMoreThan24hAreDisplayedCorrectly() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person userPerson = new Person();
         userPerson.setFirstName("person");
         userPerson.setPermissions(List.of(USER));
         final Application applicationOfUser = new Application();
-        applicationOfUser.setId(3);
+        applicationOfUser.setId(3L);
         applicationOfUser.setVacationType(anyVacationType());
         applicationOfUser.setPerson(userPerson);
         applicationOfUser.setStatus(WAITING);
@@ -1119,7 +1161,7 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("userApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(3)),
+                    hasProperty("id", is(3L)),
                     hasProperty("duration", is("35 "))
                 ))
             ))
@@ -1128,12 +1170,13 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForDepartmentHeadAndOfficeRoleAndNotAllAreInHisDepartment() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("Atticus");
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(WAITING);
@@ -1142,10 +1185,10 @@ class ApplicationForLeaveViewControllerTest {
         application.setDayLength(FULL);
 
         final Person personNotMember = new Person();
-        personNotMember.setId(11);
+        personNotMember.setId(11L);
         personNotMember.setFirstName("Not Member");
         final Application applicationNotMember = new Application();
-        applicationNotMember.setId(11);
+        applicationNotMember.setId(11L);
         applicationNotMember.setVacationType(anyVacationType());
         applicationNotMember.setPerson(personNotMember);
         applicationNotMember.setStatus(WAITING);
@@ -1154,10 +1197,10 @@ class ApplicationForLeaveViewControllerTest {
         applicationNotMember.setDayLength(FULL);
 
         final Person headAndOfficePerson = new Person();
-        headAndOfficePerson.setId(2);
+        headAndOfficePerson.setId(2L);
         headAndOfficePerson.setPermissions(List.of(USER, DEPARTMENT_HEAD, OFFICE));
         final Application applicationOfHeadAndOffice = new Application();
-        applicationOfHeadAndOffice.setId(2);
+        applicationOfHeadAndOffice.setId(2L);
         applicationOfHeadAndOffice.setStatus(WAITING);
         applicationOfHeadAndOffice.setVacationType(anyVacationType());
         applicationOfHeadAndOffice.setPerson(headAndOfficePerson);
@@ -1167,7 +1210,7 @@ class ApplicationForLeaveViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(headAndOfficePerson);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(headAndOfficePerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -1192,13 +1235,13 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("approveAllowed", equalTo(true)),
                     hasProperty("rejectAllowed", equalTo(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(11)),
+                    hasProperty("id", is(11L)),
                     hasProperty("approveAllowed", equalTo(false)),
                     hasProperty("rejectAllowed", equalTo(false))
                 )
@@ -1208,12 +1251,13 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void getApplicationForSecondStageAuthorityAndOfficeRoleAndNotAllAreInHisDepartment() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("Atticus");
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setVacationType(anyVacationType());
         application.setPerson(person);
         application.setStatus(WAITING);
@@ -1222,10 +1266,10 @@ class ApplicationForLeaveViewControllerTest {
         application.setDayLength(FULL);
 
         final Person personNotMember = new Person();
-        personNotMember.setId(11);
+        personNotMember.setId(11L);
         personNotMember.setFirstName("Not Member");
         final Application applicationNotMember = new Application();
-        applicationNotMember.setId(11);
+        applicationNotMember.setId(11L);
         applicationNotMember.setVacationType(anyVacationType());
         applicationNotMember.setPerson(personNotMember);
         applicationNotMember.setStatus(WAITING);
@@ -1234,10 +1278,10 @@ class ApplicationForLeaveViewControllerTest {
         applicationNotMember.setDayLength(FULL);
 
         final Person ssaAndOfficePerson = new Person();
-        ssaAndOfficePerson.setId(2);
+        ssaAndOfficePerson.setId(2L);
         ssaAndOfficePerson.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY, OFFICE));
         final Application applicationOfSsaAndOffice = new Application();
-        applicationOfSsaAndOffice.setId(2);
+        applicationOfSsaAndOffice.setId(2L);
         applicationOfSsaAndOffice.setStatus(WAITING);
         applicationOfSsaAndOffice.setVacationType(anyVacationType());
         applicationOfSsaAndOffice.setPerson(ssaAndOfficePerson);
@@ -1247,7 +1291,7 @@ class ApplicationForLeaveViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(ssaAndOfficePerson);
 
         final Application applicationCancellationRequest = new Application();
-        applicationCancellationRequest.setId(10);
+        applicationCancellationRequest.setId(10L);
         applicationCancellationRequest.setVacationType(anyVacationType());
         applicationCancellationRequest.setPerson(ssaAndOfficePerson);
         applicationCancellationRequest.setStatus(ALLOWED_CANCELLATION_REQUESTED);
@@ -1272,13 +1316,13 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(model().attribute("otherApplications", hasItems(
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(1)),
+                    hasProperty("id", is(1L)),
                     hasProperty("approveAllowed", equalTo(true)),
                     hasProperty("rejectAllowed", equalTo(true))
                 ),
                 allOf(
                     instanceOf(ApplicationForLeaveDto.class),
-                    hasProperty("id", is(11)),
+                    hasProperty("id", is(11L)),
                     hasProperty("approveAllowed", equalTo(false)),
                     hasProperty("rejectAllowed", equalTo(false))
                 )
@@ -1286,16 +1330,19 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(view().name("application/application-overview"));
     }
 
-    @Test
-    void ensureReplacementItem() throws Exception {
+    @ValueSource(strings = {"/web/application", "/web/application/replacement"})
+    @ParameterizedTest
+    void ensureReplacementItem(String path) throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
+
         final Person signedInUser = new Person();
-        signedInUser.setId(1337);
+        signedInUser.setId(1337L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Wayne");
 
         final Person applicationPerson = new Person();
-        applicationPerson.setId(1);
+        applicationPerson.setId(1L);
         applicationPerson.setFirstName("Alfred");
         applicationPerson.setLastName("Pennyworth");
         applicationPerson.setPermissions(List.of(USER));
@@ -1305,7 +1352,7 @@ class ApplicationForLeaveViewControllerTest {
         holidayReplacement.setNote("awesome, thanks dude!");
 
         final Application application = new Application();
-        application.setId(3);
+        application.setId(3L);
         application.setPerson(applicationPerson);
         application.setStartDate(LocalDate.now(clock).plusDays(1));
         application.setEndDate(LocalDate.now(clock).plusDays(1));
@@ -1315,7 +1362,7 @@ class ApplicationForLeaveViewControllerTest {
         when(applicationService.getForHolidayReplacement(signedInUser, LocalDate.now(clock)))
             .thenReturn(List.of(application));
 
-        perform(get("/web/application"))
+        perform(get(path))
             .andExpect(status().isOk())
             .andExpect(model().attribute("signedInUser", is(signedInUser)))
             .andExpect(model().attribute("applications_holiday_replacements", contains(
@@ -1331,20 +1378,21 @@ class ApplicationForLeaveViewControllerTest {
 
     @Test
     void ensureSecondStageAuthorityViewsAllowButton() throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
 
         final Person departmentHeadAndSecondStageAuth = new Person();
-        departmentHeadAndSecondStageAuth.setId(1);
+        departmentHeadAndSecondStageAuth.setId(1L);
         departmentHeadAndSecondStageAuth.setFirstName("departmentHeadAndSecondStageAuth");
         departmentHeadAndSecondStageAuth.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY));
         when(personService.getSignedInUser()).thenReturn(departmentHeadAndSecondStageAuth);
 
         final Person userOfDepartmentA = new Person();
-        userOfDepartmentA.setId(2);
+        userOfDepartmentA.setId(2L);
         userOfDepartmentA.setFirstName("userOfDepartmentA");
         userOfDepartmentA.setPermissions(List.of(USER));
 
         final Application applicationOfUserA = new Application();
-        applicationOfUserA.setId(1);
+        applicationOfUserA.setId(1L);
         applicationOfUserA.setVacationType(anyVacationType());
         applicationOfUserA.setPerson(userOfDepartmentA);
         applicationOfUserA.setStatus(WAITING);
@@ -1386,13 +1434,15 @@ class ApplicationForLeaveViewControllerTest {
     @ParameterizedTest
     @EnumSource(value = ApplicationStatus.class, names = {"WAITING", "TEMPORARY_ALLOWED"})
     void ensureReplacementItemIsPendingForApplicationStatus(ApplicationStatus status) throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
+
         final Person signedInUser = new Person();
-        signedInUser.setId(1337);
+        signedInUser.setId(1337L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
 
         final Person applicationPerson = new Person();
-        applicationPerson.setId(1);
+        applicationPerson.setId(1L);
         applicationPerson.setFirstName("Alfred");
         applicationPerson.setPermissions(List.of(USER));
 
@@ -1400,7 +1450,7 @@ class ApplicationForLeaveViewControllerTest {
         holidayReplacement.setPerson(signedInUser);
 
         final Application application = new Application();
-        application.setId(3);
+        application.setId(3L);
         application.setPerson(applicationPerson);
         application.setStatus(status);
         application.setStartDate(LocalDate.now(clock).plusDays(1));
@@ -1422,14 +1472,16 @@ class ApplicationForLeaveViewControllerTest {
     @ParameterizedTest
     @EnumSource(value = ApplicationStatus.class, names = {"ALLOWED", "ALLOWED_CANCELLATION_REQUESTED", "REJECTED", "CANCELLED", "REVOKED"})
     void ensureReplacementItemIsNotPendingForApplicationStatus(ApplicationStatus status) throws Exception {
+        when(messageSource.getMessage(any(), any(), any())).thenReturn("");
+
         final Person signedInUser = new Person();
-        signedInUser.setId(1337);
+        signedInUser.setId(1337L);
         signedInUser.setPermissions(List.of(USER));
         signedInUser.setFirstName("Bruce");
         signedInUser.setLastName("Wayne");
 
         final Person applicationPerson = new Person();
-        applicationPerson.setId(1);
+        applicationPerson.setId(1L);
         applicationPerson.setFirstName("Alfred");
         applicationPerson.setLastName("Pennyworth");
         applicationPerson.setPermissions(List.of(USER));
@@ -1439,7 +1491,7 @@ class ApplicationForLeaveViewControllerTest {
         holidayReplacement.setNote("awesome, thanks dude!");
 
         final Application application = new Application();
-        application.setId(3);
+        application.setId(3L);
         application.setPerson(applicationPerson);
         application.setStatus(status);
         application.setStartDate(LocalDate.now(clock).plusDays(1));
@@ -1458,14 +1510,242 @@ class ApplicationForLeaveViewControllerTest {
             .andExpect(view().name("application/application-overview"));
     }
 
-    private static VacationTypeEntity anyVacationType() {
-        final VacationTypeEntity vacationType = new VacationTypeEntity();
-        vacationType.setCategory(VacationCategory.HOLIDAY);
-        vacationType.setMessageKey("vacationTypeMessageKey");
-        return vacationType;
+    @ValueSource(strings = {"/web/application", "/web/sicknote/submitted"})
+    @ParameterizedTest
+    void getSubmittedSickNotesForOffice(String path) throws Exception {
+
+        final Person person = new Person();
+        person.setFirstName("Hans");
+        person.setLastName("Dampf");
+        final LocalDate startDate = LocalDate.of(2024, 1, 4);
+        final LocalDate endDate = LocalDate.of(2024, 1, 5);
+        final Map<LocalDate, WorkingTimeCalendar.WorkingDayInformation> workingDays = Map.of(
+            startDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY),
+            endDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
+        final SickNote sickNote = SickNote.builder()
+            .id(1L)
+            .sickNoteType(anySickNoteType())
+            .person(person)
+            .status(SUBMITTED)
+            .startDate(startDate)
+            .endDate(endDate)
+            .dayLength(FULL)
+            .workingTimeCalendar(new WorkingTimeCalendar(workingDays))
+            .build();
+
+        final Person officePerson = new Person();
+        officePerson.setPermissions(List.of(OFFICE));
+
+        when(personService.getSignedInUser()).thenReturn(officePerson);
+        when(personService.getActivePersons()).thenReturn(List.of(person));
+
+        // other sicknotes
+        userIsAllowedToSubmitSickNotes(true);
+        when(sickNoteService.getForStatesAndPerson(List.of(SUBMITTED), List.of(person))).thenReturn(List.of(sickNote));
+
+        perform(get(path)).andExpect(status().isOk())
+            .andExpect(model().attribute("signedInUser", is(officePerson)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(true)))
+            .andExpect(model().attribute("otherSickNotes", hasSize(1)))
+            .andExpect(model().attribute("otherSickNotes", hasItems(
+                allOf(
+                    instanceOf(SickNoteDto.class),
+                    hasProperty("id", equalTo("1")),
+                    hasProperty("workDays", equalTo(BigDecimal.valueOf(2L))),
+                    hasProperty("person",
+                        hasProperty("name", equalTo("Hans Dampf"))
+                    ),
+                    hasProperty("type", equalTo("sickNoteTypeMessageKey")),
+                    hasProperty("status", equalTo("SUBMITTED")),
+                    hasProperty("durationOfAbsenceDescription")
+                )
+            )))
+            .andExpect(view().name("application/application-overview"));
+    }
+
+    @Test
+    void getSubmittedSickNotesForDepartmentHeadWithSickNoteEdit() throws Exception {
+
+        final Person person = new Person();
+        person.setFirstName("Hans");
+        person.setLastName("Dampf");
+        final LocalDate startDate = LocalDate.of(2024, 1, 4);
+        final LocalDate endDate = LocalDate.of(2024, 1, 5);
+        final Map<LocalDate, WorkingTimeCalendar.WorkingDayInformation> workingDays = Map.of(
+            startDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY),
+            endDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
+        final SickNote sickNote = SickNote.builder()
+            .id(1L)
+            .sickNoteType(anySickNoteType())
+            .person(person)
+            .status(SUBMITTED)
+            .startDate(startDate)
+            .endDate(endDate)
+            .dayLength(FULL)
+            .workingTimeCalendar(new WorkingTimeCalendar(workingDays))
+            .build();
+
+        final Person departmentHead = new Person();
+        departmentHead.setPermissions(List.of(DEPARTMENT_HEAD, SICK_NOTE_EDIT));
+
+        when(personService.getSignedInUser()).thenReturn(departmentHead);
+        when(departmentService.getMembersForDepartmentHead(departmentHead)).thenReturn(List.of(person));
+
+        // other sicknotes
+        userIsAllowedToSubmitSickNotes(true);
+        when(sickNoteService.getForStatesAndPerson(List.of(SUBMITTED), List.of(person))).thenReturn(List.of(sickNote));
+
+        perform(get("/web/application")).andExpect(status().isOk())
+            .andExpect(model().attribute("signedInUser", is(departmentHead)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(true)))
+            .andExpect(model().attribute("otherSickNotes", hasSize(1)))
+            .andExpect(model().attribute("otherSickNotes", hasItems(
+                allOf(
+                    instanceOf(SickNoteDto.class),
+                    hasProperty("id", equalTo("1")),
+                    hasProperty("workDays", equalTo(BigDecimal.valueOf(2L))),
+                    hasProperty("person",
+                        hasProperty("name", equalTo("Hans Dampf"))
+                    ),
+                    hasProperty("type", equalTo("sickNoteTypeMessageKey")),
+                    hasProperty("status", equalTo("SUBMITTED")),
+                    hasProperty("durationOfAbsenceDescription")
+                )
+            )))
+            .andExpect(view().name("application/application-overview"));
+    }
+
+    @Test
+    void getSubmittedSickNotesForSecondStageAuthorityWithSickNoteEdit() throws Exception {
+
+        final Person person = new Person();
+        person.setFirstName("Hans");
+        person.setLastName("Dampf");
+        final LocalDate startDate = LocalDate.of(2024, 1, 4);
+        final LocalDate endDate = LocalDate.of(2024, 1, 5);
+        final Map<LocalDate, WorkingTimeCalendar.WorkingDayInformation> workingDays = Map.of(
+            startDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY),
+            endDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
+        final SickNote sickNote = SickNote.builder()
+            .id(1L)
+            .sickNoteType(anySickNoteType())
+            .person(person)
+            .status(SUBMITTED)
+            .startDate(startDate)
+            .endDate(endDate)
+            .dayLength(FULL)
+            .workingTimeCalendar(new WorkingTimeCalendar(workingDays))
+            .build();
+
+        final Person secondStageAuthority = new Person();
+        secondStageAuthority.setPermissions(List.of(SECOND_STAGE_AUTHORITY, SICK_NOTE_EDIT));
+
+        when(personService.getSignedInUser()).thenReturn(secondStageAuthority);
+        when(departmentService.getMembersForSecondStageAuthority(secondStageAuthority)).thenReturn(List.of(person));
+
+        // other sicknotes
+        userIsAllowedToSubmitSickNotes(true);
+        when(sickNoteService.getForStatesAndPerson(List.of(SUBMITTED), List.of(person))).thenReturn(List.of(sickNote));
+
+        perform(get("/web/application")).andExpect(status().isOk())
+            .andExpect(model().attribute("signedInUser", is(secondStageAuthority)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(true)))
+            .andExpect(model().attribute("otherSickNotes", hasSize(1)))
+            .andExpect(model().attribute("otherSickNotes", hasItems(
+                allOf(
+                    instanceOf(SickNoteDto.class),
+                    hasProperty("id", equalTo("1")),
+                    hasProperty("workDays", equalTo(BigDecimal.valueOf(2L))),
+                    hasProperty("person",
+                        hasProperty("name", equalTo("Hans Dampf"))
+                    ),
+                    hasProperty("type", equalTo("sickNoteTypeMessageKey")),
+                    hasProperty("status", equalTo("SUBMITTED")),
+                    hasProperty("durationOfAbsenceDescription")
+                )
+            )))
+            .andExpect(view().name("application/application-overview"));
+    }
+
+    @Test
+    void getSubmittedSickNotesForBossWithSickNoteEdit() throws Exception {
+
+        final Person person = new Person();
+        person.setFirstName("Hans");
+        person.setLastName("Dampf");
+        final LocalDate startDate = LocalDate.of(2024, 1, 4);
+        final LocalDate endDate = LocalDate.of(2024, 1, 5);
+        final Map<LocalDate, WorkingTimeCalendar.WorkingDayInformation> workingDays = Map.of(
+            startDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY),
+            endDate, new WorkingTimeCalendar.WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
+        final SickNote sickNote = SickNote.builder()
+            .id(1L)
+            .sickNoteType(anySickNoteType())
+            .person(person)
+            .status(SUBMITTED)
+            .startDate(startDate)
+            .endDate(endDate)
+            .dayLength(FULL)
+            .workingTimeCalendar(new WorkingTimeCalendar(workingDays))
+            .build();
+
+        final Person boss = new Person();
+        boss.setPermissions(List.of(BOSS, SICK_NOTE_EDIT));
+
+        when(personService.getSignedInUser()).thenReturn(boss);
+        when(personService.getActivePersons()).thenReturn(List.of(person, boss));
+
+        // other sicknotes
+        userIsAllowedToSubmitSickNotes(true);
+        when(sickNoteService.getForStatesAndPerson(List.of(SUBMITTED), List.of(person))).thenReturn(List.of(sickNote));
+
+        perform(get("/web/application")).andExpect(status().isOk())
+            .andExpect(model().attribute("signedInUser", is(boss)))
+            .andExpect(model().attribute("canAccessSickNoteSubmissions", is(true)))
+            .andExpect(model().attribute("otherSickNotes", hasSize(1)))
+            .andExpect(model().attribute("otherSickNotes", hasItems(
+                allOf(
+                    instanceOf(SickNoteDto.class),
+                    hasProperty("id", equalTo("1")),
+                    hasProperty("workDays", equalTo(BigDecimal.valueOf(2L))),
+                    hasProperty("person",
+                        hasProperty("name", equalTo("Hans Dampf"))
+                    ),
+                    hasProperty("type", equalTo("sickNoteTypeMessageKey")),
+                    hasProperty("status", equalTo("SUBMITTED"))
+                )
+            )))
+            .andExpect(view().name("application/application-overview"));
+    }
+
+    private static SickNoteType anySickNoteType() {
+        final SickNoteType sickNoteType = new SickNoteType();
+        sickNoteType.setCategory(SICK_NOTE);
+        sickNoteType.setMessageKey("sickNoteTypeMessageKey");
+        return sickNoteType;
+    }
+
+    private VacationType<?> anyVacationType() {
+        return ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(VacationCategory.HOLIDAY)
+            .messageKey("vacationTypeMessageKey")
+            .build();
     }
 
     private ResultActions perform(MockHttpServletRequestBuilder builder) throws Exception {
         return standaloneSetup(sut).build().perform(builder);
+    }
+
+    private void userIsAllowedToSubmitSickNotes(boolean userIsAllowedToSubmit) {
+        final Settings settings = new Settings();
+        final SickNoteSettings sickNoteSettings = new SickNoteSettings();
+        sickNoteSettings.setUserIsAllowedToSubmitSickNotes(userIsAllowedToSubmit);
+        settings.setSickNoteSettings(sickNoteSettings);
+        when(settingsService.getSettings()).thenReturn(settings);
     }
 }

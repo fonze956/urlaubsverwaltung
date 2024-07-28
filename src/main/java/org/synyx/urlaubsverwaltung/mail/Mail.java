@@ -7,29 +7,33 @@ import org.synyx.urlaubsverwaltung.person.Person;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
 public class Mail {
 
     private final List<Person> mailAddressRecipients;
-    private final boolean sendToTechnicalMail;
 
     private final String templateName;
-    private final Map<String, Object> templateModel;
+    private final MailTemplateModelSupplier templateModelSupplier;
 
     private final String subjectMessageKey;
     private final Object[] subjectMessageArguments;
 
     private final List<MailAttachment> mailAttachments;
 
-    Mail(List<Person> mailAddressRecipients, boolean sendToTechnicalMail,
-         String templateName, Map<String, Object> templateModel, String subjectMessageKey,
-         Object[] subjectMessageArguments, List<MailAttachment> mailAttachments) {
+    Mail(
+        List<Person> mailAddressRecipients,
+        String templateName,
+        MailTemplateModelSupplier templateModelSupplier,
+        String subjectMessageKey,
+        Object[] subjectMessageArguments,
+        List<MailAttachment> mailAttachments
+    ) {
         this.mailAddressRecipients = mailAddressRecipients;
-        this.sendToTechnicalMail = sendToTechnicalMail;
         this.templateName = templateName;
-        this.templateModel = templateModel;
+        this.templateModelSupplier = templateModelSupplier;
         this.subjectMessageKey = subjectMessageKey;
         this.subjectMessageArguments = subjectMessageArguments;
         this.mailAttachments = mailAttachments;
@@ -39,16 +43,12 @@ public class Mail {
         return Optional.ofNullable(mailAddressRecipients);
     }
 
-    public boolean isSendToTechnicalMail() {
-        return sendToTechnicalMail;
-    }
-
     public String getTemplateName() {
         return templateName;
     }
 
-    public Map<String, Object> getTemplateModel() {
-        return templateModel;
+    public Map<String, Object> getTemplateModel(Locale locale) {
+        return templateModelSupplier.getMailTemplateModel(locale);
     }
 
     public String getSubjectMessageKey() {
@@ -73,20 +73,14 @@ public class Mail {
     public static class Builder {
 
         private final List<Person> mailAddressRecipients = new ArrayList<>();
-        private boolean sendToTechnicalMail;
 
         private String templateName;
-        private Map<String, Object> templateModel = new HashMap<>();
+        private MailTemplateModelSupplier templateModelSupplier = locale -> new HashMap<>();
 
         private String subjectMessageKey;
         private Object[] subjectMessageArguments;
 
         private List<MailAttachment> mailAttachments;
-
-        public Mail.Builder withTechnicalRecipient(boolean sendToTechnicalMail) {
-            this.sendToTechnicalMail = sendToTechnicalMail;
-            return this;
-        }
 
         public Mail.Builder withRecipient(final Person recipient) {
             withRecipient(List.of(recipient));
@@ -109,9 +103,9 @@ public class Mail {
             return this;
         }
 
-        public Mail.Builder withTemplate(String templateName, Map<String, Object> templateModel) {
+        public Mail.Builder withTemplate(String templateName, MailTemplateModelSupplier templateModelSupplier) {
             this.templateName = templateName;
-            this.templateModel = templateModel;
+            this.templateModelSupplier = templateModelSupplier;
             return this;
         }
 
@@ -131,9 +125,14 @@ public class Mail {
         }
 
         public Mail build() {
-            return new Mail(mailAddressRecipients, sendToTechnicalMail,
-                templateName, templateModel, subjectMessageKey, subjectMessageArguments,
-                mailAttachments);
+            return new Mail(
+                mailAddressRecipients,
+                templateName,
+                templateModelSupplier,
+                subjectMessageKey,
+                subjectMessageArguments,
+                mailAttachments
+            );
         }
     }
 }

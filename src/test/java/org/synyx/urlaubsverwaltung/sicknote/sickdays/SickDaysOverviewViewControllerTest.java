@@ -16,7 +16,6 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.synyx.urlaubsverwaltung.absence.DateRange;
-import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 import org.synyx.urlaubsverwaltung.search.PageableSearchQuery;
@@ -24,6 +23,7 @@ import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNote;
 import org.synyx.urlaubsverwaltung.sicknote.sicknotetype.SickNoteType;
 import org.synyx.urlaubsverwaltung.web.DateFormatAware;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar;
+import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -56,6 +56,7 @@ import static org.synyx.urlaubsverwaltung.person.Role.USER;
 import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteCategory.SICK_NOTE;
 import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteCategory.SICK_NOTE_CHILD;
 import static org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteStatus.ACTIVE;
+import static org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation.WorkingTimeCalendarEntryType.WORKDAY;
 
 @ExtendWith(MockitoExtension.class)
 class SickDaysOverviewViewControllerTest {
@@ -138,29 +139,33 @@ class SickDaysOverviewViewControllerTest {
     void periodsSickNotesWithDateRangeWithRole() throws Exception {
 
         final Person office = new Person();
-        office.setId(1);
+        office.setId(1L);
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("FirstName one");
         person.setLastName("LastName one");
         person.setPermissions(List.of(USER));
 
         final Person person2 = new Person();
-        person2.setId(2);
+        person2.setId(2L);
         person2.setFirstName("FirstName two");
         person2.setLastName("LastName two");
         person2.setPermissions(List.of(USER));
 
         final Person person3 = new Person();
-        person3.setId(3);
+        person3.setId(3L);
         person3.setFirstName("FirstName three");
         person3.setLastName("LastName three");
         person3.setPermissions(List.of(USER));
 
-        final Map<LocalDate, DayLength> workingTimes = buildWorkingTimeByDate(LocalDate.of(2019, 1, 1), LocalDate.of(2019, 12, 31), (date) -> FULL);
+        final Map<LocalDate, WorkingDayInformation> workingTimes = buildWorkingTimeByDate(
+            LocalDate.of(2019, 1, 1),
+            LocalDate.of(2019, 12, 31),
+            (date) -> new WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimes);
 
         final SickNoteType childSickType = new SickNoteType();
@@ -215,7 +220,7 @@ class SickDaysOverviewViewControllerTest {
             .andExpect(status().isOk())
             .andExpect(model().attribute("sickDaysStatistics", contains(
                 allOf(
-                    hasProperty("personId", is(1)),
+                    hasProperty("personId", is(1L)),
                     hasProperty("personAvatarUrl", is("")),
                     hasProperty("personnelNumber", is("0000001337")),
                     hasProperty("personFirstName", is("FirstName one")),
@@ -227,7 +232,7 @@ class SickDaysOverviewViewControllerTest {
                     hasProperty("amountChildSickDaysWithAUB", is(ZERO))
                 ),
                 allOf(
-                    hasProperty("personId", is(2)),
+                    hasProperty("personId", is(2L)),
                     hasProperty("personAvatarUrl", is("")),
                     hasProperty("personnelNumber", is("0000000042")),
                     hasProperty("personFirstName", is("FirstName two")),
@@ -239,7 +244,7 @@ class SickDaysOverviewViewControllerTest {
                     hasProperty("amountChildSickDaysWithAUB", is(BigDecimal.valueOf(5)))
                 ),
                 allOf(
-                    hasProperty("personId", is(3)),
+                    hasProperty("personId", is(3L)),
                     hasProperty("personAvatarUrl", is("")),
                     hasProperty("personnelNumber", is("0000000021")),
                     hasProperty("personFirstName", is("FirstName three")),
@@ -263,7 +268,7 @@ class SickDaysOverviewViewControllerTest {
     void periodsSickNotesWithDateWithoutRange() throws Exception {
 
         final Person office = new Person();
-        office.setId(1);
+        office.setId(1L);
         office.setPermissions(List.of(USER, OFFICE));
         when(personService.getSignedInUser()).thenReturn(office);
 
@@ -297,7 +302,7 @@ class SickDaysOverviewViewControllerTest {
     void sickNotesWithoutPersonnelNumberColumn() throws Exception {
 
         final Person signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         signedInUser.setPermissions(List.of(USER));
         when(personService.getSignedInUser()).thenReturn(signedInUser);
 
@@ -321,8 +326,8 @@ class SickDaysOverviewViewControllerTest {
             .andExpect(view().name("sicknote/sick_days"));
     }
 
-    private Map<LocalDate, DayLength> buildWorkingTimeByDate(LocalDate from, LocalDate to, Function<LocalDate, DayLength> dayLengthProvider) {
-        Map<LocalDate, DayLength> map = new HashMap<>();
+    private Map<LocalDate, WorkingDayInformation> buildWorkingTimeByDate(LocalDate from, LocalDate to, Function<LocalDate, WorkingDayInformation> dayLengthProvider) {
+        final Map<LocalDate, WorkingDayInformation> map = new HashMap<>();
         for (LocalDate date : new DateRange(from, to)) {
             map.put(date, dayLengthProvider.apply(date));
         }

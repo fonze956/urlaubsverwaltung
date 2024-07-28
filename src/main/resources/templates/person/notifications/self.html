@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" th:lang="${language}" th:class="|tw-${theme}|" xmlns:th="http://www.thymeleaf.org">
   <head>
     <title></title>
@@ -77,6 +77,20 @@
             <h2
               class="tw-sticky tw-text-lg tw-border-b tw-bg-white dark:tw-bg-zinc-900 dark:tw-py-0.5"
               style="top: var(--uv-header-height)"
+              th:text="#{person.notifications.section.sicknote.title}"
+            >
+              Meine Krankmeldungen
+            </h2>
+            <ul class="list-selectable tw-list-none tw-m-0 tw-p-0">
+              <li
+                th:replace="~{person/notifications/notification-card::list-item-card(visible=${personNotificationsDto.ownSickNoteSubmittedCreatedEditedCancelled.visible},active=${personNotificationsDto.ownSickNoteSubmittedCreatedEditedCancelled.active},name='ownSickNoteSubmittedCreatedEditedCancelled.active',label='person.notifications.section.sicknote.createdEditedCancelled.label',info='person.notifications.section.sicknote.createdEditedCancelled.info')}"
+              ></li>
+            </ul>
+          </section>
+          <section>
+            <h2
+              class="tw-sticky tw-text-lg tw-border-b tw-bg-white dark:tw-bg-zinc-900 dark:tw-py-0.5"
+              style="top: var(--uv-header-height)"
               th:text="#{person.notifications.section.overtime.title}"
             >
               Meine Überstunden
@@ -108,15 +122,11 @@
       </div>
 
       <noscript>
-        <div class="tw-mt-24 form-section tw-mb-16">
-          <hr />
-          <button th:text="#{action.save}" class="button-main-green col-xs-12 col-sm-5 col-md-2" type="submit"></button>
-          <button
-            th:text="#{action.cancel}"
-            type="button"
-            class="button col-xs-12 col-sm-5 col-md-2 pull-right"
-            data-back-button
-          ></button>
+        <hr class="tw-w-full tw-m-0 tw-mt-6" />
+
+        <div class="tw-mt-6 tw-flex tw-justify-between tw-gap-4">
+          <button th:text="#{action.save}" class="button-main-green tw-w-56" type="submit">Speichern</button>
+          <button data-back-button th:text="#{action.cancel}" type="button" class="button">Abbrechen</button>
         </div>
       </noscript>
     </form>

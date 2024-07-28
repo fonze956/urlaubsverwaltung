@@ -1,7 +1,6 @@
 package org.synyx.urlaubsverwaltung.avatar;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -52,7 +51,7 @@ class AvatarControllerTest {
             .param("name", name))
             .andExpect(status().isOk())
             .andExpect(content().contentType("image/svg+xml"))
-            .andExpect(header().string("Cache-Control", "max-age=3600"))
+            .andExpect(header().string("Cache-Control", "max-age=31536000"))
             .andExpect(content().string("<svg></svg>"));
     }
 

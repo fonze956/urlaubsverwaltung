@@ -1,31 +1,24 @@
 package org.synyx.urlaubsverwaltung.ui.pages;
 
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.springframework.context.MessageSource;
-import org.synyx.urlaubsverwaltung.ui.Page;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 
-import java.util.Locale;
+import static com.microsoft.playwright.options.LoadState.DOMCONTENTLOADED;
 
-public class LoginPage implements Page {
+public class LoginPage {
 
-    private static final By USERNAME_SELECTOR = By.id("username");
-    private static final By PASSWORD_SELECTOR = By.id("password");
-    private static final By SUBMIT_SELECTOR = By.cssSelector("button[type=submit]");
+    private static final String USERNAME_SELECTOR = "#username";
+    private static final String PASSWORD_SELECTOR = "#password";
+    private static final String SUBMIT_SELECTOR = "#kc-login";
 
-    private final WebDriver driver;
-    private final MessageSource messageSource;
-    private final Locale locale;
+    private final Page page;
 
-    public LoginPage(WebDriver driver, MessageSource messageSource, Locale locale) {
-        this.driver = driver;
-        this.messageSource = messageSource;
-        this.locale = locale;
+    public LoginPage(Page page) {
+        this.page = page;
     }
 
-    @Override
-    public boolean isVisible(WebDriver driver) {
-        return webpageTitleIsShown(driver) && usernameElementExists(driver) && passwordElementExists(driver);
+    public boolean isVisible() {
+        return usernameElementExists(page) && passwordElementExists(page);
     }
 
     /**
@@ -34,32 +27,20 @@ public class LoginPage implements Page {
      * @param credentials username and password
      */
     public void login(Credentials credentials) {
-        driver.findElement(USERNAME_SELECTOR).sendKeys(credentials.username);
-        driver.findElement(PASSWORD_SELECTOR).sendKeys(credentials.password);
-        driver.findElement(SUBMIT_SELECTOR).click();
+        page.fill(USERNAME_SELECTOR, credentials.username);
+        page.fill(PASSWORD_SELECTOR, credentials.password);
+        page.waitForResponse(Response::ok, () -> page.locator(SUBMIT_SELECTOR).click());
+        page.waitForLoadState(DOMCONTENTLOADED);
     }
 
-    private boolean webpageTitleIsShown(WebDriver driver) {
-        final String loginText = messageSource.getMessage("login.title", new Object[]{}, locale);
-        return driver.getTitle().equals(loginText);
+    private static boolean usernameElementExists(Page page) {
+        return page.locator(USERNAME_SELECTOR) != null;
     }
 
-    private static boolean usernameElementExists(WebDriver driver) {
-        return !driver.findElements(USERNAME_SELECTOR).isEmpty();
+    private static boolean passwordElementExists(Page page) {
+        return page.locator(PASSWORD_SELECTOR) != null;
     }
 
-    private static boolean passwordElementExists(WebDriver driver) {
-        return !driver.findElements(PASSWORD_SELECTOR).isEmpty();
-    }
-
-    public static class Credentials {
-
-        public final String username;
-        public final String password;
-
-        public Credentials(String username, String password) {
-            this.username = username;
-            this.password = password;
-        }
+    public record Credentials(String username, String password) {
     }
 }

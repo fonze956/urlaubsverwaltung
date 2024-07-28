@@ -26,7 +26,7 @@ public interface SickNoteService {
      * @param id to search the sick note by
      * @return optional sick note matching the given id
      */
-    Optional<SickNote> getById(Integer id);
+    Optional<SickNote> getById(Long id);
 
     /**
      * Get all the sick notes of the given person that are in the given period.
@@ -53,6 +53,13 @@ public interface SickNoteService {
      * @return all {@link SickNote} with specific states since
      */
     List<SickNote> getForStatesSince(List<SickNoteStatus> sickNoteStatuses, LocalDate since);
+
+    /**
+     * Get all {@link SickNote} with specific states and persons
+     *
+     * @return all {@link SickNote} with specific states and persons
+     */
+    List<SickNote> getForStatesAndPerson(List<SickNoteStatus> sickNoteStatuses, List<Person> persons);
 
     /**
      * Get all {@link SickNote} with specific states and persons

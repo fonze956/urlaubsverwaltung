@@ -66,7 +66,7 @@ public class SortComparator<T> implements Comparator<T> {
 
         final String errorMessage = format("type=\"%s\" does not contain property=\"%s\".", type, String.join(".", properties));
 
-        final PropertyDescriptor propertyDescriptor = BeanUtils.getPropertyDescriptor(type, properties.get(0));
+        final PropertyDescriptor propertyDescriptor = BeanUtils.getPropertyDescriptor(type, properties.getFirst());
         if (propertyDescriptor == null) {
             LOG.debug(errorMessage);
             return null;
@@ -81,8 +81,8 @@ public class SortComparator<T> implements Comparator<T> {
         }
 
         if (properties.size() == 1) {
-            if (value instanceof String) {
-                value = ((String) value).toLowerCase();
+            if (value instanceof String string) {
+                value = string.toLowerCase();
             }
             return (Comparable<? super Comparable>) value;
         }

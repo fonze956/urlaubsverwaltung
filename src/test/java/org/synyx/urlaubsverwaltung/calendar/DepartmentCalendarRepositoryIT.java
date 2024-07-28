@@ -1,5 +1,7 @@
 package org.synyx.urlaubsverwaltung.calendar;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,8 +13,6 @@ import org.synyx.urlaubsverwaltung.department.DepartmentService;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
 import java.time.Period;
 import java.util.List;
 import java.util.Optional;
@@ -76,7 +76,7 @@ class DepartmentCalendarRepositoryIT extends TestContainersBase {
 
         final DepartmentCalendar departmentCalendar = new DepartmentCalendar(savedDepartmentTwo.getId(), savedPerson);
         departmentCalendar.setCalendarPeriod(Period.ofDays(1));
-        sut.save(departmentCalendar);
+        sut.saveAndFlush(departmentCalendar);
 
         assertThat(sut.findAll()).hasSize(2);
     }
@@ -96,7 +96,10 @@ class DepartmentCalendarRepositoryIT extends TestContainersBase {
 
         final DepartmentCalendar secondDepartmentCalendar = new DepartmentCalendar(savedDepartment.getId(), savedPerson);
         secondDepartmentCalendar.setCalendarPeriod(Period.ofDays(1));
-        final DataIntegrityViolationException exception = assertThrows(DataIntegrityViolationException.class, () -> sut.save(secondDepartmentCalendar));
+        final DataIntegrityViolationException exception = assertThrows(
+            DataIntegrityViolationException.class,
+            () -> sut.saveAndFlush(secondDepartmentCalendar)
+        );
         assertThat(exception.getMessage()).contains("constraint [unique_department_calendar_per_person]");
     }
 
@@ -110,7 +113,7 @@ class DepartmentCalendarRepositoryIT extends TestContainersBase {
         department.setMembers(List.of(savedPerson));
         final Department savedDepartment = departmentService.create(department);
 
-        final Integer departmentId = savedDepartment.getId();
+        final Long departmentId = savedDepartment.getId();
         final DepartmentCalendar firstDepartmentCalendar = new DepartmentCalendar(departmentId, savedPerson);
         firstDepartmentCalendar.setCalendarPeriod(Period.ofDays(1));
         sut.save(firstDepartmentCalendar);

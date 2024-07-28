@@ -1,18 +1,20 @@
 package org.synyx.urlaubsverwaltung.application.application;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.StaticMessageSource;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.period.Period;
 import org.synyx.urlaubsverwaltung.person.Person;
 
-import java.sql.Time;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static java.time.ZoneOffset.UTC;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -157,19 +159,35 @@ class ApplicationTest {
     }
 
     @Test
+    void getHoursByYear() {
+
+        final Application application = new Application();
+        application.setStartDate(LocalDate.of(2022, 12, 30));
+        application.setEndDate(LocalDate.of(2023, 1, 2));
+        application.setHours(Duration.ofHours(20));
+
+        final Map<Integer, Duration> hoursByYear = application.getHoursByYear();
+
+        assertThat(hoursByYear).containsEntry(2022, Duration.ofHours(10));
+        assertThat(hoursByYear).containsEntry(2023, Duration.ofHours(10));
+    }
+
+    @Test
     void toStringTest() {
 
         final Person person = new Person("Theo", "Theo", "Theo", "Theo");
-        person.setId(10);
+        person.setId(10L);
         person.setPermissions(List.of(USER));
 
         final HolidayReplacementEntity replacementEntity = new HolidayReplacementEntity();
         replacementEntity.setPerson(person);
         replacementEntity.setNote("hello myself");
 
-        final VacationTypeEntity vacationType = new VacationTypeEntity();
-        vacationType.setCategory(VacationCategory.HOLIDAY);
-        vacationType.setColor(YELLOW);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource())
+            .id(1L)
+            .category(VacationCategory.HOLIDAY)
+            .color(YELLOW)
+            .build();
 
         final Application application = new Application();
         application.setStatus(ApplicationStatus.ALLOWED);
@@ -178,7 +196,7 @@ class ApplicationTest {
         application.setDayLength(DayLength.FULL);
         application.setPerson(person);
         application.setVacationType(vacationType);
-        application.setId(1);
+        application.setId(1L);
         application.setHours(Duration.ofHours(10));
         application.setApplicationDate(LocalDate.EPOCH);
         application.setTwoStageApproval(true);
@@ -198,8 +216,8 @@ class ApplicationTest {
         final String toString = application.toString();
         assertThat(toString).isEqualTo("Application{person=Person{id='10'}, applier=Person{id='10'}, boss=Person{id='10'}, " +
             "canceller=Person{id='10'}, twoStageApproval=true, startDate=-999999999-01-01, startTime=12:15, endDate=+999999999-12-31, " +
-            "endTime=11:15, vacationType=VacationTypeEntity{id=null, active=false, category=HOLIDAY, messageKey='null', " +
-            "requiresApproval=false, color=YELLOW, visibleToEveryone=false}, dayLength=FULL, " +
+            "endTime=11:15, vacationType=ProvidedVacationType{messageKey='null', id=1, active=false, category=HOLIDAY, " +
+            "requiresApprovalToApply=false, requiresApprovalToCancel=false, color=YELLOW, visibleToEveryone=false}, dayLength=FULL, " +
             "holidayReplacements=[HolidayReplacementEntity{person=Person{id='10'}}], " +
             "applicationDate=1970-01-01, cancelDate=+999999999-12-31, editedDate=+999999999-12-31, remindDate=+999999999-12-31, " +
             "status=ALLOWED, teamInformed=true, hours=PT10H}");
@@ -208,13 +226,13 @@ class ApplicationTest {
     @Test
     void equals() {
         final Application applicationOne = new Application();
-        applicationOne.setId(1);
+        applicationOne.setId(1L);
 
         final Application applicationOneOne = new Application();
-        applicationOneOne.setId(1);
+        applicationOneOne.setId(1L);
 
         final Application applicationTwo = new Application();
-        applicationTwo.setId(2);
+        applicationTwo.setId(2L);
 
         assertThat(applicationOne)
             .isEqualTo(applicationOne)
@@ -227,7 +245,7 @@ class ApplicationTest {
     @Test
     void hashCodeTest() {
         final Application applicationOne = new Application();
-        applicationOne.setId(1);
+        applicationOne.setId(1L);
 
         assertThat(applicationOne.hashCode()).isEqualTo(32);
     }

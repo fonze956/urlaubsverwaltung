@@ -1,16 +1,22 @@
 package org.synyx.urlaubsverwaltung.calendar;
 
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.Inheritance;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Inheritance;
+import jakarta.persistence.SequenceGenerator;
+
+import static jakarta.persistence.GenerationType.SEQUENCE;
 
 @Entity
 @Inheritance
 abstract class CalendarAccessible {
 
     @Id
-    @GeneratedValue
+    @Column(name = "id", unique = true, nullable = false, updatable = false)
+    @GeneratedValue(strategy = SEQUENCE, generator = "calendar_accessible_generator")
+    @SequenceGenerator(name = "calendar_accessible_generator", sequenceName = "calendar_accessible_id_seq")
     private Long id;
 
     private boolean isAccessible = false;

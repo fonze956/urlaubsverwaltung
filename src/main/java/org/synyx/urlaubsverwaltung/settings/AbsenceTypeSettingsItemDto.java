@@ -3,23 +3,45 @@ package org.synyx.urlaubsverwaltung.settings;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor;
 
+import java.util.List;
 import java.util.Objects;
 
 public class AbsenceTypeSettingsItemDto {
 
-    private Integer id;
+    private Long id;
     private boolean active;
+    private String label;
+    // messageKey is required until there is no distinction between Provided- and CustomVacationType anymore
     private String messageKey;
     private VacationCategory category;
-    private boolean requiresApproval;
+    private boolean requiresApprovalToApply;
+    private boolean requiresApprovalToCancel;
     private VacationTypeColor color;
     private boolean visibleToEveryone;
+    private List<AbsenceTypeSettingsItemLabelDto> labels;
 
-    public Integer getId() {
+    public AbsenceTypeSettingsItemDto() {
+        //
+    }
+
+    private AbsenceTypeSettingsItemDto(Builder builder) {
+        this.id = builder.id;
+        this.active = builder.active;
+        this.label = builder.label;
+        this.messageKey = builder.messageKey;
+        this.category = builder.category;
+        this.requiresApprovalToApply = builder.requiresApprovalToApply;
+        this.requiresApprovalToCancel = builder.requiresApprovalToCancel;
+        this.color = builder.color;
+        this.visibleToEveryone = builder.visibleToEveryone;
+        this.labels = builder.labels;
+    }
+
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 
@@ -29,6 +51,14 @@ public class AbsenceTypeSettingsItemDto {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public String getLabel() {
+        return label;
+    }
+
+    public void setLabel(String label) {
+        this.label = label;
     }
 
     public String getMessageKey() {
@@ -47,12 +77,20 @@ public class AbsenceTypeSettingsItemDto {
         this.category = category;
     }
 
-    public boolean isRequiresApproval() {
-        return requiresApproval;
+    public boolean isRequiresApprovalToApply() {
+        return requiresApprovalToApply;
     }
 
-    public void setRequiresApproval(boolean requiresApproval) {
-        this.requiresApproval = requiresApproval;
+    public void setRequiresApprovalToApply(boolean requiresApprovalToApply) {
+        this.requiresApprovalToApply = requiresApprovalToApply;
+    }
+
+    public boolean isRequiresApprovalToCancel() {
+        return requiresApprovalToCancel;
+    }
+
+    public void setRequiresApprovalToCancel(boolean requiresApprovalToCancel) {
+        this.requiresApprovalToCancel = requiresApprovalToCancel;
     }
 
     public VacationTypeColor getColor() {
@@ -63,13 +101,20 @@ public class AbsenceTypeSettingsItemDto {
         this.color = color;
     }
 
-
     public boolean isVisibleToEveryone() {
         return visibleToEveryone;
     }
 
     public void setVisibleToEveryone(boolean visibleToEveryone) {
         this.visibleToEveryone = visibleToEveryone;
+    }
+
+    public List<AbsenceTypeSettingsItemLabelDto> getLabels() {
+        return labels;
+    }
+
+    public void setLabels(List<AbsenceTypeSettingsItemLabelDto> labels) {
+        this.labels = labels;
     }
 
     public static Builder builder() {
@@ -81,11 +126,14 @@ public class AbsenceTypeSettingsItemDto {
         return "AbsenceTypeItemSettingDto{" +
             "id=" + id +
             ", active=" + active +
+            ", label='" + label + '\'' +
             ", messageKey='" + messageKey + '\'' +
             ", category='" + category + '\'' +
-            ", requiresApproval=" + requiresApproval +
+            ", requiresApprovalToApply=" + requiresApprovalToApply +
+            ", requiresApprovalToCancel=" + requiresApprovalToCancel +
             ", color=" + color +
             ", visibleToEveryone=" + visibleToEveryone +
+            ", labels=" + labels +
             '}';
     }
 
@@ -93,37 +141,49 @@ public class AbsenceTypeSettingsItemDto {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        AbsenceTypeSettingsItemDto that = (AbsenceTypeSettingsItemDto) o;
-        return active == that.active
-            && requiresApproval == that.requiresApproval
-            && visibleToEveryone == that.visibleToEveryone
-            && Objects.equals(id, that.id)
-            && Objects.equals(messageKey, that.messageKey)
-            && category == that.category
-            && Objects.equals(color, that.color);
+        AbsenceTypeSettingsItemDto dto = (AbsenceTypeSettingsItemDto) o;
+        return active == dto.active
+            && requiresApprovalToApply == dto.requiresApprovalToApply
+            && requiresApprovalToCancel == dto.requiresApprovalToCancel
+            && visibleToEveryone == dto.visibleToEveryone
+            && Objects.equals(id, dto.id)
+            && Objects.equals(label, dto.label)
+            && Objects.equals(messageKey, dto.messageKey)
+            && category == dto.category
+            && color == dto.color
+            && Objects.equals(labels, dto.labels);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, active, messageKey, category, requiresApproval, color, visibleToEveryone);
+        return Objects.hash(id, active, label, messageKey, category, requiresApprovalToApply, requiresApprovalToCancel,
+            color, visibleToEveryone, labels);
     }
 
-    static class Builder {
-        private Integer id;
+    public static class Builder {
+        private Long id;
         private boolean active;
+        private String label;
         private String messageKey;
         private VacationCategory category;
-        private boolean requiresApproval;
+        private boolean requiresApprovalToApply;
+        private boolean requiresApprovalToCancel;
         private VacationTypeColor color;
         private boolean visibleToEveryone;
+        private List<AbsenceTypeSettingsItemLabelDto> labels = List.of();
 
-        Builder setId(Integer id) {
+        Builder setId(Long id) {
             this.id = id;
             return this;
         }
 
         Builder setActive(boolean active) {
             this.active = active;
+            return this;
+        }
+
+        Builder setLabel(String label) {
+            this.label = label;
             return this;
         }
 
@@ -137,8 +197,13 @@ public class AbsenceTypeSettingsItemDto {
             return this;
         }
 
-        Builder setRequiresApproval(boolean requiresApproval) {
-            this.requiresApproval = requiresApproval;
+        Builder setRequiresApprovalToApply(boolean requiresApprovalToApply) {
+            this.requiresApprovalToApply = requiresApprovalToApply;
+            return this;
+        }
+
+        Builder setRequiresApprovalToCancel(boolean requiresApprovalToCancel) {
+            this.requiresApprovalToCancel = requiresApprovalToCancel;
             return this;
         }
 
@@ -152,16 +217,13 @@ public class AbsenceTypeSettingsItemDto {
             return this;
         }
 
+        Builder setLabels(List<AbsenceTypeSettingsItemLabelDto> labels) {
+            this.labels = labels;
+            return this;
+        }
+
         AbsenceTypeSettingsItemDto build() {
-            final AbsenceTypeSettingsItemDto dto = new AbsenceTypeSettingsItemDto();
-            dto.setId(id);
-            dto.setActive(active);
-            dto.setMessageKey(messageKey);
-            dto.setCategory(category);
-            dto.setRequiresApproval(requiresApproval);
-            dto.setColor(color);
-            dto.setVisibleToEveryone(visibleToEveryone);
-            return dto;
+            return new AbsenceTypeSettingsItemDto(this);
         }
     }
 }

@@ -8,43 +8,27 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.synyx.urlaubsverwaltung.absence.Absence;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationInteractionService;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
-import org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMapping;
-import org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingService;
-import org.synyx.urlaubsverwaltung.calendarintegration.CalendarSyncService;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
-import org.synyx.urlaubsverwaltung.settings.Settings;
-import org.synyx.urlaubsverwaltung.settings.SettingsService;
 import org.synyx.urlaubsverwaltung.sicknote.comment.SickNoteCommentAction;
 import org.synyx.urlaubsverwaltung.sicknote.comment.SickNoteCommentService;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 
 import static java.time.ZoneOffset.UTC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingType.SICKNOTE;
-import static org.synyx.urlaubsverwaltung.calendarintegration.AbsenceMappingType.VACATION;
 
-/**
- * Unit test for {@link SickNoteInteractionServiceImpl}.
- */
 @ExtendWith(MockitoExtension.class)
 class SickNoteInteractionServiceImplTest {
 
@@ -60,28 +44,18 @@ class SickNoteInteractionServiceImplTest {
     @Mock
     private SickNoteMailService sickNoteMailService;
     @Mock
-    private CalendarSyncService calendarSyncService;
-    @Mock
-    private AbsenceMappingService absenceMappingService;
-    @Mock
-    private SettingsService settingsService;
-    @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
 
     @Test
     void ensureCreatedSickNoteIsPersisted() {
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(Optional.of("42"));
-        when(settingsService.getSettings()).thenReturn(new Settings());
-
         when(sickNoteService.save(any(SickNote.class))).then(returnsFirstArg());
 
         final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
@@ -102,17 +76,13 @@ class SickNoteInteractionServiceImplTest {
         final ArgumentCaptor<SickNoteCreatedEvent> eventCaptor = ArgumentCaptor.forClass(SickNoteCreatedEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         final SickNoteCreatedEvent sickNoteCreatedEvent = eventCaptor.getValue();
-        assertThat(sickNoteCreatedEvent.getSickNote()).isEqualTo(createdSickNote);
-        assertThat(sickNoteCreatedEvent.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(sickNoteCreatedEvent.getId()).isNotNull();
+        assertThat(sickNoteCreatedEvent.sickNote()).isEqualTo(createdSickNote);
+        assertThat(sickNoteCreatedEvent.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(sickNoteCreatedEvent.id()).isNotNull();
     }
 
     @Test
     void ensureCreatedSickNoteHasComment() {
-
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(Optional.of("42"));
-        when(settingsService.getSettings()).thenReturn(new Settings());
 
         when(sickNoteService.save(any())).then(returnsFirstArg());
 
@@ -120,7 +90,7 @@ class SickNoteInteractionServiceImplTest {
         final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
@@ -140,16 +110,12 @@ class SickNoteInteractionServiceImplTest {
     @Test
     void ensureCreatingSickNoteAddsEventToCalendar() {
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-        when(calendarSyncService.addAbsence(any(Absence.class))).thenReturn(Optional.of("42"));
-        when(settingsService.getSettings()).thenReturn(new Settings());
-
         when(sickNoteService.save(any())).then(returnsFirstArg());
 
         final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
@@ -157,9 +123,6 @@ class SickNoteInteractionServiceImplTest {
             .build();
 
         sut.create(sickNote, creator);
-
-        verify(calendarSyncService).addAbsence(any(Absence.class));
-        verify(absenceMappingService).create(eq(sickNote.getId()), eq(SICKNOTE), anyString());
 
         final ArgumentCaptor<SickNote> captor = ArgumentCaptor.forClass(SickNote.class);
         verify(sickNoteService).save(captor.capture());
@@ -174,34 +137,32 @@ class SickNoteInteractionServiceImplTest {
         final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
             .person(new Person("muster", "Muster", "Marlene", "muster@example.org"))
             .build();
 
-        sut.create(sickNote, creator);
+        final String comment = "comment";
 
-        verify(sickNoteMailService).sendCreatedToColleagues(sickNote);
+        sut.create(sickNote, creator, comment);
+
+        verify(sickNoteMailService).sendCreatedToSickPerson(sickNote);
+        verify(sickNoteMailService).sendCreatedOrAcceptedToColleagues(sickNote);
+        verify(sickNoteMailService).sendSickNoteCreatedNotificationToOfficeAndResponsibleManagement(sickNote, comment);
     }
 
     @Test
     void ensureUpdatedSickHasComment() {
 
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-
         when(sickNoteService.save(any())).then(returnsFirstArg());
-
-        final AbsenceMapping absenceMapping = new AbsenceMapping(1, VACATION, "42");
-        when(absenceMappingService.getAbsenceByIdAndType(anyInt(), eq(SICKNOTE))).thenReturn(Optional.of(absenceMapping));
-        when(settingsService.getSettings()).thenReturn(new Settings());
 
         final String comment = "test comment";
         final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
@@ -220,22 +181,22 @@ class SickNoteInteractionServiceImplTest {
         final ArgumentCaptor<SickNoteUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(SickNoteUpdatedEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         final SickNoteUpdatedEvent sickNoteUpdatedEvent = eventCaptor.getValue();
-        assertThat(sickNoteUpdatedEvent.getSickNote()).isEqualTo(sickNote);
-        assertThat(sickNoteUpdatedEvent.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(sickNoteUpdatedEvent.getId()).isNotNull();
+        assertThat(sickNoteUpdatedEvent.sickNote()).isEqualTo(sickNote);
+        assertThat(sickNoteUpdatedEvent.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(sickNoteUpdatedEvent.id()).isNotNull();
+
+        verify(sickNoteMailService).sendEditedToSickPerson(sickNote);
     }
 
     @Test
     void ensureCancelledSickNoteIsPersisted() {
-        final AbsenceMapping absenceMapping = new AbsenceMapping(1, VACATION, "42");
-        when(absenceMappingService.getAbsenceByIdAndType(anyInt(), eq(SICKNOTE))).thenReturn(Optional.of(absenceMapping));
 
         when(sickNoteService.save(any())).then(returnsFirstArg());
 
         final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
@@ -244,11 +205,11 @@ class SickNoteInteractionServiceImplTest {
 
         when(sickNoteService.save(any())).then(returnsFirstArg());
 
-        final SickNote cancelledSickNote = sut.cancel(sickNote, creator);
+        final SickNote cancelledSickNote = sut.cancel(sickNote, creator, "comment");
         assertThat(cancelledSickNote).isNotNull();
         assertThat(cancelledSickNote.getStatus()).isEqualTo(SickNoteStatus.CANCELLED);
 
-        verify(commentService).create(sickNote, SickNoteCommentAction.CANCELLED, creator);
+        verify(commentService).create(sickNote, SickNoteCommentAction.CANCELLED, creator, "comment");
         verify(sickNoteService).save(sickNote);
 
         final ArgumentCaptor<SickNote> captor = ArgumentCaptor.forClass(SickNote.class);
@@ -258,33 +219,9 @@ class SickNoteInteractionServiceImplTest {
         final ArgumentCaptor<SickNoteCancelledEvent> eventCaptor = ArgumentCaptor.forClass(SickNoteCancelledEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         final SickNoteCancelledEvent sickNoteCancelledEvent = eventCaptor.getValue();
-        assertThat(sickNoteCancelledEvent.getSickNote()).isEqualTo(cancelledSickNote);
-        assertThat(sickNoteCancelledEvent.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(sickNoteCancelledEvent.getId()).isNotNull();
-    }
-
-    @Test
-    void ensureCancellingSickNoteDeletesCalendarEvent() {
-        final AbsenceMapping absenceMapping = new AbsenceMapping(1, VACATION, "42");
-        when(absenceMappingService.getAbsenceByIdAndType(anyInt(), eq(SICKNOTE))).thenReturn(Optional.of(absenceMapping));
-
-        final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
-
-        final SickNote sickNote = SickNote.builder()
-            .id(42)
-            .startDate(LocalDate.now(UTC))
-            .endDate(LocalDate.now(UTC))
-            .dayLength(DayLength.FULL)
-            .person(new Person("muster", "Muster", "Marlene", "muster@example.org"))
-            .build();
-
-        when(sickNoteService.save(any())).then(returnsFirstArg());
-
-        sut.cancel(sickNote, creator);
-
-        verify(absenceMappingService).getAbsenceByIdAndType(anyInt(), eq(SICKNOTE));
-        verify(calendarSyncService).deleteAbsence(anyString());
-        verify(absenceMappingService).delete(any(AbsenceMapping.class));
+        assertThat(sickNoteCancelledEvent.sickNote()).isEqualTo(cancelledSickNote);
+        assertThat(sickNoteCancelledEvent.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(sickNoteCancelledEvent.id()).isNotNull();
     }
 
     @Test
@@ -295,26 +232,21 @@ class SickNoteInteractionServiceImplTest {
         final Person canceller = new Person("canceller", "Senior", "Canceller", "canceller@example.org");
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
             .person(new Person("muster", "Muster", "Marlene", "muster@example.org"))
             .build();
 
-        sut.cancel(sickNote, canceller);
+        sut.cancel(sickNote, canceller, "comment");
 
+        verify(sickNoteMailService).sendCancelledToSickPerson(sickNote);
         verify(sickNoteMailService).sendCancelToColleagues(sickNote);
     }
 
     @Test
     void ensureConvertedSickNoteIsPersisted() {
-
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-
-        final AbsenceMapping absenceMapping = new AbsenceMapping(1, VACATION, "42");
-        when(absenceMappingService.getAbsenceByIdAndType(anyInt(), eq(SICKNOTE))).thenReturn(Optional.of(absenceMapping));
-        when(settingsService.getSettings()).thenReturn(new Settings());
 
         when(sickNoteService.save(any())).then(returnsFirstArg());
 
@@ -328,7 +260,7 @@ class SickNoteInteractionServiceImplTest {
         applicationForLeave.setPerson(new Person("muster", "Muster", "Marlene", "muster@example.org"));
 
         final SickNote sickNote = SickNote.builder()
-            .id(42)
+            .id(42L)
             .startDate(LocalDate.now(UTC))
             .endDate(LocalDate.now(UTC))
             .dayLength(DayLength.FULL)
@@ -353,56 +285,16 @@ class SickNoteInteractionServiceImplTest {
         final ArgumentCaptor<SickNoteToApplicationConvertedEvent> eventCaptor = ArgumentCaptor.forClass(SickNoteToApplicationConvertedEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         final SickNoteToApplicationConvertedEvent sickNoteToApplicationConvertedEvent = eventCaptor.getValue();
-        assertThat(sickNoteToApplicationConvertedEvent.getSickNote()).isEqualTo(convertedSickNote);
-        assertThat(sickNoteToApplicationConvertedEvent.getApplication()).isEqualTo(applicationForLeave);
-        assertThat(sickNoteToApplicationConvertedEvent.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(sickNoteToApplicationConvertedEvent.getId()).isNotNull();
-    }
-
-    @Test
-    void ensureConvertingSickNoteToVacationUpdatesCalendarEvent() {
-
-        when(calendarSyncService.isRealProviderConfigured()).thenReturn(true);
-
-        final AbsenceMapping absenceMapping = new AbsenceMapping(1, VACATION, "42");
-        when(absenceMappingService.getAbsenceByIdAndType(anyInt(), eq(SICKNOTE))).thenReturn(Optional.of(absenceMapping));
-        when(settingsService.getSettings()).thenReturn(new Settings());
-
-        when(sickNoteService.save(any())).then(returnsFirstArg());
-
-        final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
-
-        final Application applicationForLeave = new Application();
-        applicationForLeave.setStartDate(LocalDate.now(UTC));
-        applicationForLeave.setEndDate(LocalDate.now(UTC));
-        applicationForLeave.setStatus(ApplicationStatus.ALLOWED);
-        applicationForLeave.setDayLength(DayLength.FULL);
-        applicationForLeave.setPerson(creator);
-
-        final SickNote sickNote = SickNote.builder()
-            .id(42)
-            .startDate(LocalDate.now(UTC))
-            .endDate(LocalDate.now(UTC))
-            .dayLength(DayLength.FULL)
-            .person(new Person("muster", "Muster", "Marlene", "muster@example.org"))
-            .build();
-
-        sut.convert(sickNote, applicationForLeave, creator);
-
-        verify(absenceMappingService).getAbsenceByIdAndType(anyInt(), eq(SICKNOTE));
-        verify(calendarSyncService).update(any(Absence.class), anyString());
-        verify(absenceMappingService).delete(absenceMapping);
-        verify(absenceMappingService).create(isNull(), eq(VACATION), anyString());
-
-        final ArgumentCaptor<SickNote> captor = ArgumentCaptor.forClass(SickNote.class);
-        verify(sickNoteService).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(SickNoteStatus.CONVERTED_TO_VACATION);
+        assertThat(sickNoteToApplicationConvertedEvent.sickNote()).isEqualTo(convertedSickNote);
+        assertThat(sickNoteToApplicationConvertedEvent.application()).isEqualTo(applicationForLeave);
+        assertThat(sickNoteToApplicationConvertedEvent.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(sickNoteToApplicationConvertedEvent.id()).isNotNull();
     }
 
     @Test
     void ensureDeletionOfAllSickNotesAndAllCommentsOnPersonDeletedEvent() {
         final Person person = new Person();
-        final int personId = 1;
+        final long personId = 1;
         person.setId(personId);
 
         sut.deleteAll(new PersonDeletedEvent(person));
@@ -415,29 +307,11 @@ class SickNoteInteractionServiceImplTest {
     }
 
     @Test
-    void ensureDeletionOfAbsenceMappingOnPersonDeletedEvent() {
-        final Person person = new Person();
-        person.setId(42);
-
-        final SickNote sickNote = SickNote.builder().id(42).build();
-        when(sickNoteService.deleteAllByPerson(person)).thenReturn(List.of(sickNote));
-
-        final AbsenceMapping absenceMapping = new AbsenceMapping(42, SICKNOTE, "eventId");
-        when(absenceMappingService.getAbsenceByIdAndType(42, SICKNOTE)).thenReturn(Optional.of(absenceMapping));
-
-        sut.deleteAll(new PersonDeletedEvent(person));
-
-        verify(absenceMappingService).getAbsenceByIdAndType(42, SICKNOTE);
-        verify(absenceMappingService).delete(absenceMapping);
-        verify(calendarSyncService).deleteAbsence("eventId");
-    }
-
-    @Test
     void ensureSickNoteDeletedEventsArePublishedWhenPersonIsDeleted() {
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
-        final SickNote sickNote = SickNote.builder().id(42).build();
+        final SickNote sickNote = SickNote.builder().id(42L).build();
         when(sickNoteService.deleteAllByPerson(person)).thenReturn(List.of(sickNote));
 
         sut.deleteAll(new PersonDeletedEvent(person));
@@ -445,8 +319,73 @@ class SickNoteInteractionServiceImplTest {
         final ArgumentCaptor<SickNoteDeletedEvent> eventCaptor = ArgumentCaptor.forClass(SickNoteDeletedEvent.class);
         verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
         final SickNoteDeletedEvent sickNoteDeletedEvent = eventCaptor.getValue();
-        assertThat(sickNoteDeletedEvent.getSickNote()).isEqualTo(sickNote);
-        assertThat(sickNoteDeletedEvent.getCreatedAt()).isBeforeOrEqualTo(Instant.now());
-        assertThat(sickNoteDeletedEvent.getId()).isNotNull();
+        assertThat(sickNoteDeletedEvent.sickNote()).isEqualTo(sickNote);
+        assertThat(sickNoteDeletedEvent.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(sickNoteDeletedEvent.id()).isNotNull();
+    }
+
+    @Test
+    void submit() {
+        when(sickNoteService.save(any(SickNote.class))).then(returnsFirstArg());
+
+        final SickNote sickNote = SickNote.builder()
+                .id(42L)
+                .startDate(LocalDate.now(UTC))
+                .endDate(LocalDate.now(UTC))
+                .dayLength(DayLength.FULL)
+                .person(new Person("muster", "Muster", "Marlene", "muster@example.org"))
+                .build();
+
+        final Person creator = new Person("creator", "Senior", "Creator", "creator@example.org");
+        final String comment = "comment";
+
+        final SickNote submittedSickNote = sut.submit(sickNote, creator, comment);
+        assertThat(submittedSickNote).isNotNull();
+        assertThat(submittedSickNote.getStatus()).isEqualTo(SickNoteStatus.SUBMITTED);
+
+        final ArgumentCaptor<SickNote> captor = ArgumentCaptor.forClass(SickNote.class);
+        verify(sickNoteService).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(SickNoteStatus.SUBMITTED);
+
+        verify(commentService).create(sickNote, SickNoteCommentAction.SUBMITTED, creator, comment);
+
+        verify(sickNoteMailService).sendSickNoteSubmittedNotificationToSickPerson(sickNote);
+        verify(sickNoteMailService).sendSickNoteSubmittedNotificationToOfficeAndResponsibleManagement(sickNote);
+    }
+
+    @Test
+    void accept() {
+        when(sickNoteService.save(any(SickNote.class))).then(returnsFirstArg());
+
+        final SickNote sickNote = SickNote.builder()
+                .id(42L)
+                .startDate(LocalDate.now(UTC))
+                .endDate(LocalDate.now(UTC))
+                .dayLength(DayLength.FULL)
+                .person(new Person("muster", "Muster", "Marlene", "muster@example.org"))
+                .status(SickNoteStatus.ACTIVE)
+                .build();
+
+        final Person maintainer = new Person("maintainer", "Senior", "Maintainer", "maintainer@example.org");
+
+        final SickNote acceptedSickNote = sut.accept(sickNote, maintainer, "comment");
+        assertThat(acceptedSickNote).isNotNull();
+        assertThat(acceptedSickNote.getStatus()).isEqualTo(SickNoteStatus.ACTIVE);
+
+        final ArgumentCaptor<SickNote> captor = ArgumentCaptor.forClass(SickNote.class);
+        verify(sickNoteService).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(SickNoteStatus.ACTIVE);
+
+        verify(commentService).create(sickNote, SickNoteCommentAction.ACCEPTED, maintainer, "comment");
+
+        verify(sickNoteMailService).sendSickNoteAcceptedNotificationToSickPerson(sickNote, maintainer);
+        verify(sickNoteMailService).sendSickNoteAcceptedNotificationToOfficeAndResponsibleManagement(sickNote, maintainer);
+
+        final ArgumentCaptor<SickNoteUpdatedEvent> eventCaptor = ArgumentCaptor.forClass(SickNoteUpdatedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        final SickNoteUpdatedEvent sickNoteCreatedEvent = eventCaptor.getValue();
+        assertThat(sickNoteCreatedEvent.sickNote()).isEqualTo(acceptedSickNote);
+        assertThat(sickNoteCreatedEvent.createdAt()).isBeforeOrEqualTo(Instant.now());
+        assertThat(sickNoteCreatedEvent.id()).isNotNull();
     }
 }

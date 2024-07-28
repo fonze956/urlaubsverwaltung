@@ -1,49 +1,73 @@
 package org.synyx.urlaubsverwaltung.application.vacationtype;
 
+import org.slf4j.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationStartedEvent;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.MessageSource;
+import org.springframework.context.event.EventListener;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 
+import static java.lang.invoke.MethodHandles.lookup;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.HOLIDAY;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OTHER;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OVERTIME;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.SPECIALLEAVE;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.UNPAIDLEAVE;
+import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.YELLOW;
+import static org.synyx.urlaubsverwaltung.settings.SupportedLanguages.compareSupportedLanguageLocale;
 
 @Service
 @Transactional
 public class VacationTypeServiceImpl implements VacationTypeService {
 
+    private static final Logger LOG = getLogger(lookup().lookupClass());
+
     private final VacationTypeRepository vacationTypeRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
+    private final MessageSource messageSource;
 
     @Autowired
-    public VacationTypeServiceImpl(VacationTypeRepository vacationTypeRepository) {
+    VacationTypeServiceImpl(VacationTypeRepository vacationTypeRepository,
+                            ApplicationEventPublisher applicationEventPublisher,
+                            MessageSource messageSource) {
         this.vacationTypeRepository = vacationTypeRepository;
+        this.applicationEventPublisher = applicationEventPublisher;
+        this.messageSource = messageSource;
     }
 
     @Override
-    public Optional<VacationType> getById(Integer id) {
-        return Optional.of(convert(vacationTypeRepository.getById(id)));
+    public Optional<VacationType<?>> getById(Long id) {
+        return Optional.of(convert(vacationTypeRepository.getReferenceById(id), messageSource));
     }
 
     @Override
-    public List<VacationType> getAllVacationTypes() {
-        return vacationTypeRepository.findAll().stream()
-            .map(convertToVacationType())
+    public List<VacationType<?>> getAllVacationTypes() {
+        return vacationTypeRepository.findAll(Sort.by("id")).stream()
+            .map(vacationTypeEntity -> convert(vacationTypeEntity, messageSource))
             .collect(toList());
     }
 
     @Override
-    public List<VacationType> getActiveVacationTypes() {
-        return vacationTypeRepository.findByActiveIsTrue().stream()
-            .map(convertToVacationType())
+    public List<VacationType<?>> getActiveVacationTypes() {
+        return vacationTypeRepository.findByActiveIsTrueOrderById().stream()
+            .map(vacationTypeEntity -> convert(vacationTypeEntity, messageSource))
             .collect(toList());
     }
 
     @Override
-    public List<VacationType> getActiveVacationTypesWithoutCategory(VacationCategory vacationCategory) {
+    public List<VacationType<?>> getActiveVacationTypesWithoutCategory(VacationCategory vacationCategory) {
         return getActiveVacationTypes().stream()
             .filter(vacationType -> vacationType.getCategory() != vacationCategory)
             .collect(toList());
@@ -52,42 +76,210 @@ public class VacationTypeServiceImpl implements VacationTypeService {
     @Override
     public void updateVacationTypes(List<VacationTypeUpdate> vacationTypeUpdates) {
 
-        final Map<Integer, VacationTypeUpdate> byId = vacationTypeUpdates.stream().collect(toMap(VacationTypeUpdate::getId, vacationTypeUpdate -> vacationTypeUpdate));
+        final Map<Long, VacationTypeUpdate> byId = vacationTypeUpdates.stream()
+            .collect(toMap(VacationTypeUpdate::getId, vacationTypeUpdate -> vacationTypeUpdate));
 
         final List<VacationTypeEntity> updatedEntities = vacationTypeRepository.findAllById(byId.keySet())
             .stream()
-            .map(VacationTypeServiceImpl::convert)
+            .map(vacationTypeEntity -> convert(vacationTypeEntity, messageSource))
             .map(vacationType -> {
                 final VacationTypeUpdate vacationTypeUpdate = byId.get(vacationType.getId());
-                vacationType.setActive(vacationTypeUpdate.isActive());
-                vacationType.setRequiresApproval(vacationTypeUpdate.isRequiresApproval());
-                vacationType.setColor(vacationTypeUpdate.getColor());
-                vacationType.setVisibleToEveryone(vacationTypeUpdate.isVisibleToEveryone());
-                return vacationType;
+                switch (vacationType) {
+                    case ProvidedVacationType providedVacationType -> {
+                        return Optional.of(updateProvidedVacationType(providedVacationType, vacationTypeUpdate));
+                    }
+                    case CustomVacationType customVacationType -> {
+                        return Optional.of(updateCustomVacationType(customVacationType, vacationTypeUpdate));
+                    }
+                    default -> {
+                        LOG.error("cannot handle vacationTypeUpdate={} for unknown vacationType implementation.", vacationTypeUpdate);
+                        return Optional.empty();
+                    }
+                }
             })
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .map(VacationType.class::cast)
             .map(VacationTypeServiceImpl::convert)
-            .collect(toList());
+            .toList();
 
-        vacationTypeRepository.saveAll(updatedEntities);
+        vacationTypeRepository.saveAll(updatedEntities).stream()
+            .map(entity -> convert(entity, messageSource))
+            .map(VacationTypeUpdatedEvent::of)
+            .forEach(applicationEventPublisher::publishEvent);
     }
 
-    private Function<VacationTypeEntity, VacationType> convertToVacationType() {
-        return vacationTypeEntity -> new VacationType(vacationTypeEntity.getId(), vacationTypeEntity.isActive(), vacationTypeEntity.getCategory(), vacationTypeEntity.getMessageKey(), vacationTypeEntity.isRequiresApproval(), vacationTypeEntity.getColor(), vacationTypeEntity.isVisibleToEveryone());
+    @Override
+    public void createVacationTypes(Collection<VacationType<?>> vacationTypes) {
+
+        final List<VacationTypeEntity> newEntities = vacationTypes.stream()
+            .map(VacationTypeServiceImpl::convert)
+            .filter(entity -> {
+                final boolean isNew = entity.getId() == null;
+                if (!isNew) {
+                    LOG.info("skipping vacationType={} from list of newly created vacation types due to existing id.", entity);
+                }
+                return isNew;
+            })
+            .toList();
+
+        vacationTypeRepository.saveAll(newEntities).stream()
+            .map(entity -> convert(entity, messageSource))
+            .map(VacationTypeCreatedEvent::of)
+            .forEach(applicationEventPublisher::publishEvent);
     }
 
-    public static VacationTypeEntity convert(VacationType vacationType) {
+    public static VacationTypeEntity convert(VacationType<?> vacationType) {
+        return switch (vacationType) {
+            case ProvidedVacationType providedVacationType -> convertProvidedVacationType(providedVacationType);
+            case CustomVacationType customVacationType -> convertCustomVacationType(customVacationType);
+            default -> throw new IllegalStateException("could not convert unknown vacationType.");
+        };
+    }
+
+    public static VacationType<?> convert(VacationTypeEntity vacationTypeEntity, MessageSource messageSource) {
+        if (vacationTypeEntity.isCustom()) {
+            return convertCustomVacationType(vacationTypeEntity, messageSource);
+        } else {
+            return convertProvidedVacationType(vacationTypeEntity, messageSource);
+        }
+    }
+
+    @EventListener(ApplicationStartedEvent.class)
+    void insertDefaultVacationTypes() {
+        final long count = vacationTypeRepository.count();
+        if (count == 0) {
+
+            final VacationTypeEntity holiday = createVacationTypeEntity(true, HOLIDAY, "application.data.vacationType.holiday", true, true, YELLOW, false);
+            final VacationTypeEntity specialleave = createVacationTypeEntity(true, SPECIALLEAVE, "application.data.vacationType.specialleave", true, true, YELLOW, false);
+            final VacationTypeEntity unpaidleave = createVacationTypeEntity(true, UNPAIDLEAVE, "application.data.vacationType.unpaidleave", true, true, YELLOW, false);
+            final VacationTypeEntity overtime = createVacationTypeEntity(true, OVERTIME, "application.data.vacationType.overtime", true, true, YELLOW, false);
+            final VacationTypeEntity parentalLeave = createVacationTypeEntity(false, OTHER, "application.data.vacationType.parentalLeave", true, true, YELLOW, false);
+            final VacationTypeEntity maternityProtection = createVacationTypeEntity(false, OTHER, "application.data.vacationType.maternityProtection", true, true, YELLOW, false);
+            final VacationTypeEntity sabbatical = createVacationTypeEntity(false, OTHER, "application.data.vacationType.sabbatical", true, true, YELLOW, false);
+            final VacationTypeEntity paidLeave = createVacationTypeEntity(false, OTHER, "application.data.vacationType.paidLeave", true, true, YELLOW, false);
+            final VacationTypeEntity cure = createVacationTypeEntity(false, OTHER, "application.data.vacationType.cure", true, true, YELLOW, false);
+            final VacationTypeEntity education = createVacationTypeEntity(false, OTHER, "application.data.vacationType.education", true, true, YELLOW, false);
+            final VacationTypeEntity homeOffice = createVacationTypeEntity(false, OTHER, "application.data.vacationType.homeOffice", true, true, YELLOW, false);
+            final VacationTypeEntity outOfOffice = createVacationTypeEntity(false, OTHER, "application.data.vacationType.outOfOffice", true, true, YELLOW, false);
+            final VacationTypeEntity training = createVacationTypeEntity(false, OTHER, "application.data.vacationType.training", true, true, YELLOW, false);
+            final VacationTypeEntity employmentBan = createVacationTypeEntity(false, OTHER, "application.data.vacationType.employmentBan", true, true, YELLOW, false);
+            final VacationTypeEntity educationalLeave = createVacationTypeEntity(false, OTHER, "application.data.vacationType.educationalLeave", true, true, YELLOW, false);
+
+            final List<VacationTypeEntity> vacationTypes = List.of(holiday, holiday, specialleave, unpaidleave, overtime, parentalLeave, maternityProtection, sabbatical, paidLeave, cure, education, homeOffice, outOfOffice, training, employmentBan, educationalLeave);
+            final List<VacationTypeEntity> savesVacationTypes = vacationTypeRepository.saveAll(vacationTypes);
+            LOG.info("Saved initial vacation types {}", savesVacationTypes);
+        }
+    }
+
+    private static VacationTypeEntity createVacationTypeEntity(boolean active, VacationCategory category, String messageKey, boolean requiresApprovalToApply, boolean requiresApprovalToCancel, VacationTypeColor color, boolean visibleToEveryone) {
+        final VacationTypeEntity vacationTypeEntity = new VacationTypeEntity();
+        vacationTypeEntity.setCustom(false);
+        vacationTypeEntity.setActive(active);
+        vacationTypeEntity.setCategory(category);
+        vacationTypeEntity.setMessageKey(messageKey);
+        vacationTypeEntity.setRequiresApprovalToApply(requiresApprovalToApply);
+        vacationTypeEntity.setRequiresApprovalToCancel(requiresApprovalToCancel);
+        vacationTypeEntity.setColor(color);
+        vacationTypeEntity.setVisibleToEveryone(visibleToEveryone);
+        return vacationTypeEntity;
+    }
+
+    private static CustomVacationType updateCustomVacationType(CustomVacationType customVacationType, VacationTypeUpdate vacationTypeUpdate) {
+
+        final List<VacationTypeLabel> labels = vacationTypeUpdate.getLabels()
+            .orElseThrow(() -> new IllegalStateException("expected vacationTypeLabels to be defined. cannot update %s".formatted(customVacationType)));
+
+        return CustomVacationType.builder(customVacationType)
+            .active(vacationTypeUpdate.isActive())
+            .requiresApprovalToApply(vacationTypeUpdate.isRequiresApprovalToApply())
+            .requiresApprovalToCancel(vacationTypeUpdate.isRequiresApprovalToCancel())
+            .color(vacationTypeUpdate.getColor())
+            .visibleToEveryone(vacationTypeUpdate.isVisibleToEveryone())
+            .labels(labels)
+            .build();
+    }
+
+    private static ProvidedVacationType updateProvidedVacationType(ProvidedVacationType providedVacationType,
+                                                                   VacationTypeUpdate vacationTypeUpdate) {
+        // updating label of ProvidedVacationType is not yet implemented.
+        // therefore no messageSource required. we can just use the given providedVacationType instance.
+        // as soon as the label of a ProvidedVacationType can be updated, we get the new label from the VacationTypeUpdate.
+        return ProvidedVacationType.builder(providedVacationType)
+            .active(vacationTypeUpdate.isActive())
+            .requiresApprovalToApply(vacationTypeUpdate.isRequiresApprovalToApply())
+            .requiresApprovalToCancel(vacationTypeUpdate.isRequiresApprovalToCancel())
+            .color(vacationTypeUpdate.getColor())
+            .visibleToEveryone(vacationTypeUpdate.isVisibleToEveryone())
+            .messageKey(providedVacationType.getMessageKey())
+            .build();
+    }
+
+    private static CustomVacationType convertCustomVacationType(VacationTypeEntity customVacationTypeEntity, MessageSource messageSource) {
+        return CustomVacationType.builder(messageSource)
+            .id(customVacationTypeEntity.getId())
+            .active(customVacationTypeEntity.isActive())
+            .category(customVacationTypeEntity.getCategory())
+            .requiresApprovalToApply(customVacationTypeEntity.isRequiresApprovalToApply())
+            .requiresApprovalToCancel(customVacationTypeEntity.isRequiresApprovalToCancel())
+            .color(customVacationTypeEntity.getColor())
+            .visibleToEveryone(customVacationTypeEntity.isVisibleToEveryone())
+            .labels(vacationTypeLabels(customVacationTypeEntity.getLabelByLocale()))
+            .build();
+    }
+
+    private static List<VacationTypeLabel> vacationTypeLabels(Map<Locale, String> labelByLocale) {
+        return labelByLocale.entrySet()
+            .stream()
+            .map(entry -> new VacationTypeLabel(entry.getKey(), entry.getValue()))
+            .sorted((o1, o2) -> compareSupportedLanguageLocale(o1.locale(), o2.locale()))
+            .toList();
+    }
+
+    private static ProvidedVacationType convertProvidedVacationType(VacationTypeEntity providedVacationType,
+                                                                    MessageSource messageSource) {
+        return ProvidedVacationType.builder(messageSource)
+            .id(providedVacationType.getId())
+            .active(providedVacationType.isActive())
+            .category(providedVacationType.getCategory())
+            .requiresApprovalToApply(providedVacationType.isRequiresApprovalToApply())
+            .requiresApprovalToCancel(providedVacationType.isRequiresApprovalToCancel())
+            .color(providedVacationType.getColor())
+            .visibleToEveryone(providedVacationType.isVisibleToEveryone())
+            .messageKey(providedVacationType.getMessageKey())
+            .build();
+    }
+
+    private static VacationTypeEntity convertProvidedVacationType(ProvidedVacationType providedVacationType) {
+        final VacationTypeEntity vacationTypeEntity = toEntityBase(providedVacationType);
+        vacationTypeEntity.setCustom(false);
+        vacationTypeEntity.setMessageKey(providedVacationType.getMessageKey());
+        return vacationTypeEntity;
+    }
+
+    private static VacationTypeEntity convertCustomVacationType(CustomVacationType customVacationType) {
+
+        final Map<Locale, String> labelByLocale = customVacationType.labels()
+            .stream()
+            .collect(toMap(VacationTypeLabel::locale, VacationTypeLabel::label));
+
+        final VacationTypeEntity vacationTypeEntity = toEntityBase(customVacationType);
+        vacationTypeEntity.setCustom(true);
+        vacationTypeEntity.setLabelByLocale(labelByLocale);
+
+        return vacationTypeEntity;
+    }
+
+    private static VacationTypeEntity toEntityBase(VacationType<?> vacationType) {
         final VacationTypeEntity vacationTypeEntity = new VacationTypeEntity();
         vacationTypeEntity.setId(vacationType.getId());
         vacationTypeEntity.setActive(vacationType.isActive());
         vacationTypeEntity.setCategory(vacationType.getCategory());
-        vacationTypeEntity.setMessageKey(vacationType.getMessageKey());
-        vacationTypeEntity.setRequiresApproval(vacationType.isRequiresApproval());
+        vacationTypeEntity.setRequiresApprovalToApply(vacationType.isRequiresApprovalToApply());
+        vacationTypeEntity.setRequiresApprovalToCancel(vacationType.isRequiresApprovalToCancel());
         vacationTypeEntity.setColor(vacationType.getColor());
         vacationTypeEntity.setVisibleToEveryone(vacationType.isVisibleToEveryone());
         return vacationTypeEntity;
     }
-
-    public static VacationType convert(VacationTypeEntity vacationTypeEntity) {
-        return new VacationType(vacationTypeEntity.getId(), vacationTypeEntity.isActive(), vacationTypeEntity.getCategory(), vacationTypeEntity.getMessageKey(), vacationTypeEntity.isRequiresApproval(), vacationTypeEntity.getColor(), vacationTypeEntity.isVisibleToEveryone());
-    }
 }
+

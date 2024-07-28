@@ -1,32 +1,33 @@
 package org.synyx.urlaubsverwaltung.sicknote.sicknotetype;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.validation.constraints.NotNull;
 import org.synyx.urlaubsverwaltung.sicknote.sicknote.SickNoteCategory;
 
-import javax.persistence.Entity;
-import javax.persistence.Enumerated;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
 import java.util.Objects;
 
-import static javax.persistence.EnumType.STRING;
+import static jakarta.persistence.EnumType.STRING;
 
 @Entity
 public class SickNoteType {
 
     @Id
-    @GeneratedValue
-    private Integer id;
+    private Long id;
 
+    @NotNull
     @Enumerated(STRING)
     private SickNoteCategory category;
 
+    @NotNull
     private String messageKey;
 
-    public Integer getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

@@ -9,7 +9,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationForLeave;
-import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeEntity;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
+import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.web.FilterPeriod;
@@ -57,24 +58,25 @@ class ApplicationForLeaveCsvExportServiceTest {
         final FilterPeriod period = new FilterPeriod(startDate, endDate);
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("personOneFirstName");
         person.setLastName("personOneLastName");
 
-        final VacationTypeEntity vacationTypeEntity = new VacationTypeEntity();
-        vacationTypeEntity.setId(1);
-        vacationTypeEntity.setVisibleToEveryone(true);
-        vacationTypeEntity.setCategory(HOLIDAY);
-        vacationTypeEntity.setMessageKey("messagekey.holiday");
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .visibleToEveryone(true)
+            .messageKey("messagekey.holiday")
+            .build();
 
         final Application application = new Application();
-        application.setId(42);
+        application.setId(42L);
         application.setPerson(person);
         application.setStartDate(startDate);
         application.setEndDate(endDate);
         application.setDayLength(DayLength.FULL);
         application.setStatus(ALLOWED);
-        application.setVacationType(vacationTypeEntity);
+        application.setVacationType(vacationType);
 
         when(workDaysCountService.getWorkDaysCount(application.getDayLength(), application.getStartDate(), application.getEndDate(), application.getPerson())).thenReturn(TEN);
 
@@ -110,7 +112,7 @@ class ApplicationForLeaveCsvExportServiceTest {
         final LocalDate endDate = LocalDate.parse("2018-12-31");
         final FilterPeriod period = new FilterPeriod(startDate, endDate);
 
-        when(messageSource.getMessage("applications.export", new String[]{}, locale)).thenReturn("test filename");
+        when(messageSource.getMessage("applications.export.filename", new String[]{}, locale)).thenReturn("test filename");
 
         final String fileName = sut.fileName(period, locale);
         assertThat(fileName).startsWith("test-filename_");

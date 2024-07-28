@@ -9,6 +9,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.MessageSource;
+import org.springframework.context.support.StaticMessageSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -18,6 +20,7 @@ import org.synyx.urlaubsverwaltung.account.AccountService;
 import org.synyx.urlaubsverwaltung.application.settings.ApplicationSettings;
 import org.synyx.urlaubsverwaltung.application.specialleave.SpecialLeaveSettingsItem;
 import org.synyx.urlaubsverwaltung.application.specialleave.SpecialLeaveSettingsService;
+import org.synyx.urlaubsverwaltung.application.vacationtype.ProvidedVacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationType;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeDto;
 import org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeService;
@@ -38,6 +41,7 @@ import java.time.Year;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -47,6 +51,8 @@ import static java.time.Month.APRIL;
 import static java.time.Month.DECEMBER;
 import static java.time.Month.JANUARY;
 import static java.time.Month.SEPTEMBER;
+import static java.util.Locale.GERMAN;
+import static java.util.Locale.JAPANESE;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -61,6 +67,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -72,14 +79,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup;
-import static org.synyx.urlaubsverwaltung.TestDataCreator.createVacationTypeEntity;
+import static org.synyx.urlaubsverwaltung.TestDataCreator.createVacationType;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.HOLIDAY;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.OVERTIME;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.ORANGE;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeColor.YELLOW;
-import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationTypeServiceImpl.convert;
 import static org.synyx.urlaubsverwaltung.person.Role.APPLICATION_ADD;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
@@ -119,7 +125,7 @@ class ApplicationForLeaveFormViewControllerTest {
     void setUp() {
         sut = new ApplicationForLeaveFormViewController(personService, departmentService, accountService, vacationTypeService,
             vacationTypeViewModelService, applicationInteractionService, applicationForLeaveFormValidator, settingsService,
-            dateFormatAware, clock, specialLeaveSettingsService);
+            dateFormatAware, clock, specialLeaveSettingsService, new ApplicationMapper(vacationTypeService));
     }
 
     @Test
@@ -139,8 +145,8 @@ class ApplicationForLeaveFormViewControllerTest {
         settings.setOvertimeSettings(overtimeSettings);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final SpecialLeaveSettingsItem inactiveSetting = new SpecialLeaveSettingsItem(2, false, "", 2);
-        final SpecialLeaveSettingsItem activeSetting = new SpecialLeaveSettingsItem(1, true, "", 1);
+        final SpecialLeaveSettingsItem inactiveSetting = new SpecialLeaveSettingsItem(2L, false, "", 2);
+        final SpecialLeaveSettingsItem activeSetting = new SpecialLeaveSettingsItem(1L, true, "", 1);
         final List<SpecialLeaveSettingsItem> specialLeaveSettings = List.of(inactiveSetting, activeSetting);
         when(specialLeaveSettingsService.getSpecialLeaveSettings()).thenReturn(specialLeaveSettings);
 
@@ -187,6 +193,9 @@ class ApplicationForLeaveFormViewControllerTest {
     @Test
     void overtimeIsActivated() throws Exception {
 
+        final MessageSource messageSource = mock(MessageSource.class);
+        when(messageSource.getMessage("vacation-type-message-key", new Object[]{}, JAPANESE)).thenReturn("vacation type label");
+
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
 
@@ -197,8 +206,18 @@ class ApplicationForLeaveFormViewControllerTest {
         final Account account = new Account(person, validFrom, validTo, true, expiryDate, TEN, TEN, TEN, "comment");
         when(accountService.getHolidaysAccount(year, person)).thenReturn(Optional.of(account));
 
-        final VacationType vacationType = new VacationType(1, true, HOLIDAY, "message_key", true, YELLOW, false);
-        when(vacationTypeService.getActiveVacationTypes()).thenReturn(List.of(vacationType));
+        when(vacationTypeService.getActiveVacationTypes()).thenReturn(List.of(
+            ProvidedVacationType.builder(messageSource)
+                .id(1L)
+                .category(HOLIDAY)
+                .messageKey("vacation-type-message-key")
+                .build()
+        ));
+
+        final ApplicationForLeaveFormVacationTypeDto vacationTypeDto = new ApplicationForLeaveFormVacationTypeDto();
+        vacationTypeDto.setId(1L);
+        vacationTypeDto.setCategory(HOLIDAY);
+        vacationTypeDto.setLabel("vacation type label");
 
         final OvertimeSettings overtimeSettings = new OvertimeSettings();
         overtimeSettings.setOvertimeActive(true);
@@ -207,15 +226,21 @@ class ApplicationForLeaveFormViewControllerTest {
         settings.setOvertimeSettings(overtimeSettings);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final ResultActions resultActions = perform(get("/web/application/new"));
-        resultActions.andExpect(status().isOk());
-        resultActions.andExpect(model().attribute("overtimeActive", is(true)));
-        resultActions.andExpect(model().attribute("vacationTypes", hasItems(vacationType)));
-        resultActions.andExpect(model().attribute("showHalfDayOption", is(true)));
+        perform(
+            get("/web/application/new")
+                .locale(JAPANESE)
+        )
+            .andExpect(status().isOk())
+            .andExpect(model().attribute("overtimeActive", is(true)))
+            .andExpect(model().attribute("vacationTypes", hasItems(vacationTypeDto)))
+            .andExpect(model().attribute("showHalfDayOption", is(true)));
     }
 
     @Test
     void overtimeIsDeactivated() throws Exception {
+
+        final MessageSource messageSource = mock(MessageSource.class);
+        when(messageSource.getMessage("vacation-type-message-key", new Object[]{}, JAPANESE)).thenReturn("vacation type label");
 
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
@@ -227,8 +252,18 @@ class ApplicationForLeaveFormViewControllerTest {
         final Account account = new Account(person, validFrom, validTo, true, expiryDate, TEN, TEN, TEN, "comment");
         when(accountService.getHolidaysAccount(year, person)).thenReturn(Optional.of(account));
 
-        final VacationType vacationType = new VacationType(1, true, HOLIDAY, "message_key", true, YELLOW, false);
-        when(vacationTypeService.getActiveVacationTypesWithoutCategory(OVERTIME)).thenReturn(List.of(vacationType));
+        when(vacationTypeService.getActiveVacationTypesWithoutCategory(OVERTIME)).thenReturn(List.of(
+            ProvidedVacationType.builder(messageSource)
+                .id(1L)
+                .category(HOLIDAY)
+                .messageKey("vacation-type-message-key")
+                .build()
+        ));
+
+        final ApplicationForLeaveFormVacationTypeDto vacationTypeDto = new ApplicationForLeaveFormVacationTypeDto();
+        vacationTypeDto.setId(1L);
+        vacationTypeDto.setCategory(HOLIDAY);
+        vacationTypeDto.setLabel("vacation type label");
 
         final OvertimeSettings overtimeSettings = new OvertimeSettings();
         overtimeSettings.setOvertimeActive(false);
@@ -237,15 +272,22 @@ class ApplicationForLeaveFormViewControllerTest {
         settings.setOvertimeSettings(overtimeSettings);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final ResultActions resultActions = perform(get("/web/application/new"));
-        resultActions.andExpect(status().isOk());
-        resultActions.andExpect(model().attribute("overtimeActive", is(false)));
-        resultActions.andExpect(model().attribute("vacationTypes", hasItems(vacationType)));
-        resultActions.andExpect(model().attribute("showHalfDayOption", is(true)));
+        perform(
+            get("/web/application/new")
+                .locale(JAPANESE)
+        )
+            .andExpect(status().isOk())
+            .andExpect(model().attribute("overtimeActive", is(false)))
+            .andExpect(model().attribute("vacationTypes", hasItems(vacationTypeDto)))
+            .andExpect(model().attribute("showHalfDayOption", is(true)));
     }
 
     @Test
     void halfdayIsDeactivated() throws Exception {
+
+        final Locale locale = JAPANESE;
+        final MessageSource messageSource = mock(MessageSource.class);
+        when(messageSource.getMessage("vacation-type-message-key", new Object[]{}, locale)).thenReturn("vacation type label");
 
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
@@ -257,8 +299,18 @@ class ApplicationForLeaveFormViewControllerTest {
         final Account account = new Account(person, validFrom, validTo, true, expiryDate, TEN, TEN, TEN, "comment");
         when(accountService.getHolidaysAccount(year, person)).thenReturn(Optional.of(account));
 
-        final VacationType vacationType = new VacationType(1, true, HOLIDAY, "message_key", true, YELLOW, false);
-        when(vacationTypeService.getActiveVacationTypesWithoutCategory(OVERTIME)).thenReturn(List.of(vacationType));
+        when(vacationTypeService.getActiveVacationTypesWithoutCategory(OVERTIME)).thenReturn(List.of(
+            ProvidedVacationType.builder(messageSource)
+                .id(1L)
+                .category(HOLIDAY)
+                .messageKey("vacation-type-message-key")
+                .build()
+        ));
+
+        final ApplicationForLeaveFormVacationTypeDto vacationTypeDto = new ApplicationForLeaveFormVacationTypeDto();
+        vacationTypeDto.setId(1L);
+        vacationTypeDto.setCategory(HOLIDAY);
+        vacationTypeDto.setLabel("vacation type label");
 
         final OvertimeSettings overtimeSettings = new OvertimeSettings();
         overtimeSettings.setOvertimeActive(false);
@@ -270,11 +322,14 @@ class ApplicationForLeaveFormViewControllerTest {
         settings.setApplicationSettings(appSettings);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final ResultActions resultActions = perform(get("/web/application/new"));
-        resultActions.andExpect(status().isOk());
-        resultActions.andExpect(model().attribute("overtimeActive", is(false)));
-        resultActions.andExpect(model().attribute("vacationTypes", hasItems(vacationType)));
-        resultActions.andExpect(model().attribute("showHalfDayOption", is(false)));
+        perform(
+            get("/web/application/new")
+                .locale(locale)
+        )
+            .andExpect(status().isOk())
+            .andExpect(model().attribute("overtimeActive", is(false)))
+            .andExpect(model().attribute("vacationTypes", hasItems(vacationTypeDto)))
+            .andExpect(model().attribute("showHalfDayOption", is(false)));
     }
 
     @Test
@@ -298,9 +353,9 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormUsesPersonOfGivenPersonId() throws Exception {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(personService.getSignedInUser()).thenReturn(personWithRole(OFFICE));
 
         final LocalDate validFrom = LocalDate.now(clock).withMonth(JANUARY.getValue()).withDayOfMonth(1);
@@ -319,11 +374,11 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormOfficeUserCanAddForAnotherUser() throws Exception {
 
         final Person person = new Person();
-        person.setId(1);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        person.setId(1L);
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
 
         final Person applier = personWithRole(USER, OFFICE);
-        applier.setId(3);
+        applier.setId(3L);
         when(personService.getSignedInUser()).thenReturn(applier);
 
         final LocalDate now = LocalDate.now(clock);
@@ -335,7 +390,7 @@ class ApplicationForLeaveFormViewControllerTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Person managedPerson = new Person();
-        managedPerson.setId(2);
+        managedPerson.setId(2L);
         when(personService.getActivePersons()).thenReturn(List.of(person, managedPerson, applier));
 
         perform(get("/web/application/new")
@@ -348,11 +403,11 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormBossUserCanAddForAnotherUser() throws Exception {
 
         final Person person = new Person();
-        person.setId(1);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        person.setId(1L);
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
 
         final Person applier = personWithRole(USER, BOSS, APPLICATION_ADD);
-        applier.setId(3);
+        applier.setId(3L);
         when(personService.getSignedInUser()).thenReturn(applier);
 
         final LocalDate now = LocalDate.now(clock);
@@ -364,7 +419,7 @@ class ApplicationForLeaveFormViewControllerTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Person managedPerson = new Person();
-        managedPerson.setId(2);
+        managedPerson.setId(2L);
         when(personService.getActivePersons()).thenReturn(List.of(person, managedPerson, applier));
 
         perform(get("/web/application/new")
@@ -377,13 +432,13 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormUserWithRoleDepartmentHeadCanAddForAnotherUser() throws Exception {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("Person One");
         person.setLastName("Lastname One");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
 
         final Person applier = personWithRole(USER, DEPARTMENT_HEAD, APPLICATION_ADD);
-        applier.setId(3);
+        applier.setId(3L);
         applier.setFirstName("Applier");
         applier.setLastName("Name");
         when(personService.getSignedInUser()).thenReturn(applier);
@@ -396,7 +451,7 @@ class ApplicationForLeaveFormViewControllerTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Person managedPerson = new Person();
-        managedPerson.setId(2);
+        managedPerson.setId(2L);
         managedPerson.setFirstName("Person Two");
         managedPerson.setLastName("Lastname Two");
         when(departmentService.getManagedMembersOfDepartmentHead(applier)).thenReturn(List.of(person, managedPerson, applier));
@@ -411,13 +466,13 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormUserWithRoleSecondStageAuthorityCanAddForAnotherUser() throws Exception {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setFirstName("Person One");
         person.setLastName("Lastname One");
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
 
         final Person applier = personWithRole(USER, SECOND_STAGE_AUTHORITY, APPLICATION_ADD);
-        applier.setId(3);
+        applier.setId(3L);
         applier.setFirstName("Applier");
         applier.setLastName("Name");
         when(personService.getSignedInUser()).thenReturn(applier);
@@ -431,7 +486,7 @@ class ApplicationForLeaveFormViewControllerTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Person managedPerson = new Person();
-        managedPerson.setId(2);
+        managedPerson.setId(2L);
         managedPerson.setFirstName("Person Two");
         managedPerson.setLastName("Lastname Two");
         when(departmentService.getManagedMembersForSecondStageAuthority(applier)).thenReturn(List.of(person, managedPerson, applier));
@@ -446,10 +501,10 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormForUnknownPersonIdFallsBackToSignedInUser() throws Exception {
 
         final Person signedInUser = new Person();
-        signedInUser.setId(1337);
+        signedInUser.setId(1337L);
 
         when(personService.getSignedInUser()).thenReturn(signedInUser);
-        when(personService.getPersonByID(1)).thenReturn(Optional.empty());
+        when(personService.getPersonByID(1L)).thenReturn(Optional.empty());
 
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInUser, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
@@ -457,7 +512,7 @@ class ApplicationForLeaveFormViewControllerTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         perform(get("/web/application/new").param("personId", "1"))
-            .andExpect(model().attribute("person", hasProperty("id", is(1337))));
+            .andExpect(model().attribute("person", hasProperty("id", is(1337L))));
     }
 
     @Test
@@ -465,7 +520,7 @@ class ApplicationForLeaveFormViewControllerTest {
 
         final Person signedInPerson = new Person();
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(signedInPerson));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(signedInPerson));
 
         perform(get("/web/application/new")
             .param("personId", "1"))
@@ -476,7 +531,7 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormAccessibleForOfficeIfGivenPersonNotSignedInPerson() throws Exception {
 
         when(personService.getSignedInUser()).thenReturn(personWithRole(OFFICE));
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(personWithId(1)));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(personWithId(1)));
 
         perform(get("/web/application/new")
             .param("personId", "1"))
@@ -487,9 +542,9 @@ class ApplicationForLeaveFormViewControllerTest {
     void getNewApplicationFormWithGivenDateFrom() throws Exception {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
 
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
         when(personService.getSignedInUser()).thenReturn(personWithRole(OFFICE));
 
         final LocalDate validFrom = LocalDate.now(clock).withMonth(JANUARY.getValue()).withDayOfMonth(1);
@@ -533,7 +588,7 @@ class ApplicationForLeaveFormViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(personWithRole(OFFICE));
 
         final Person person = new Person();
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(person));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(person));
 
         final LocalDate validFrom = LocalDate.of(2014, JANUARY, 1);
         final LocalDate validTo = LocalDate.of(2014, DECEMBER, 31);
@@ -579,11 +634,11 @@ class ApplicationForLeaveFormViewControllerTest {
         final LocalDate expireDate = LocalDate.of(2014, APRIL, 1);
         final Account account = new Account(person, validFrom, validTo, true, expireDate, TEN, TEN, TEN, "comment");
         when(accountService.getHolidaysAccount(anyInt(), eq(person))).thenReturn(Optional.of(account));
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         perform(get("/web/application/new"))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
@@ -591,17 +646,19 @@ class ApplicationForLeaveFormViewControllerTest {
     void postNewApplicationForSamePersonIsOk() throws Exception {
 
         final Person person = personWithRole(USER);
-        person.setId(1);
+        person.setId(1L);
         when(personService.getSignedInUser()).thenReturn(person);
 
-        when(applicationInteractionService.directAllow(any(Application.class), any(Person.class), any(Optional.class)))
+        when(applicationInteractionService.directAllow(any(Application.class), eq(person), any(Optional.class)))
             .thenReturn(new Application());
+
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
 
         perform(post("/web/application")
             .param("person.id", "1")
             .param("startDate", "2022-11-02")
             .param("endDate", "2022-11-03")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
         )
             .andExpect(status().is3xxRedirection());
@@ -618,7 +675,7 @@ class ApplicationForLeaveFormViewControllerTest {
                 .param("person.id", "1")
                 .param("startDate", "2022-11-02")
                 .param("endDate", "2022-11-03")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
             );
         }).hasCauseInstanceOf(AccessDeniedException.class);
@@ -635,7 +692,7 @@ class ApplicationForLeaveFormViewControllerTest {
                 .param("person.id", "1")
                 .param("startDate", "2022-11-02")
                 .param("endDate", "2022-11-03")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
             );
         }).hasCauseInstanceOf(AccessDeniedException.class);
@@ -653,7 +710,7 @@ class ApplicationForLeaveFormViewControllerTest {
                 .param("person.id", "1")
                 .param("startDate", "2022-11-02")
                 .param("endDate", "2022-11-03")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
             );
         }).hasCauseInstanceOf(AccessDeniedException.class);
@@ -669,11 +726,13 @@ class ApplicationForLeaveFormViewControllerTest {
         when(applicationInteractionService.directAllow(any(Application.class), any(Person.class), any(Optional.class)))
             .thenReturn(new Application());
 
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
+
         perform(post("/web/application")
             .param("person.id", "1")
             .param("startDate", "2022-11-02")
             .param("endDate", "2022-11-03")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
         ).andExpect(status().is3xxRedirection());
     }
@@ -689,7 +748,7 @@ class ApplicationForLeaveFormViewControllerTest {
                 .param("person.id", "1")
                 .param("startDate", "2022-11-02")
                 .param("endDate", "2022-11-03")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
             );
         }).hasCauseInstanceOf(AccessDeniedException.class);
@@ -707,7 +766,7 @@ class ApplicationForLeaveFormViewControllerTest {
                 .param("person.id", "1")
                 .param("startDate", "2022-11-02")
                 .param("endDate", "2022-11-03")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
             );
         }).hasCauseInstanceOf(AccessDeniedException.class);
@@ -723,11 +782,13 @@ class ApplicationForLeaveFormViewControllerTest {
         when(applicationInteractionService.directAllow(any(Application.class), any(Person.class), any(Optional.class)))
             .thenReturn(new Application());
 
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
+
         perform(post("/web/application")
             .param("person.id", "1")
             .param("startDate", "2022-11-02")
             .param("endDate", "2022-11-03")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
         ).andExpect(status().is3xxRedirection());
     }
@@ -743,7 +804,7 @@ class ApplicationForLeaveFormViewControllerTest {
                 .param("person.id", "1")
                 .param("startDate", "2022-11-02")
                 .param("endDate", "2022-11-03")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
             );
         }).hasCauseInstanceOf(AccessDeniedException.class);
@@ -754,7 +815,7 @@ class ApplicationForLeaveFormViewControllerTest {
 
         when(settingsService.getSettings()).thenReturn(new Settings());
         when(personService.getSignedInUser()).thenReturn(new Person());
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
 
         doAnswer(invocation -> {
             Errors errors = invocation.getArgument(1);
@@ -766,7 +827,7 @@ class ApplicationForLeaveFormViewControllerTest {
         perform(post("/web/application"))
             .andExpect(model().attribute("errors", instanceOf(Errors.class)))
             .andExpect(model().attribute("showHalfDayOption", is(true)))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
@@ -777,9 +838,11 @@ class ApplicationForLeaveFormViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(person);
         when(applicationInteractionService.apply(any(), any(), any())).thenReturn(someApplication());
 
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).requiresApprovalToApply(true).build();
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
+
         perform(post("/web/application")
-            .param("vacationType.category", "HOLIDAY")
-            .param("vacationType.requiresApproval", "true"));
+            .param("vacationType.id", "1"));
 
         verify(applicationInteractionService).apply(any(), eq(person), any());
     }
@@ -791,9 +854,11 @@ class ApplicationForLeaveFormViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(person);
         when(applicationInteractionService.directAllow(any(), any(), any())).thenReturn(someApplication());
 
+        final VacationType<?> vacationType = ProvidedVacationType.builder(new StaticMessageSource()).id(1L).requiresApprovalToApply(false).build();
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
+
         perform(post("/web/application")
-            .param("vacationType.category", "HOLIDAY")
-            .param("vacationType.requiresApproval", "false"));
+            .param("vacationType.id", "1"));
 
         verify(applicationInteractionService).directAllow(any(), eq(person), any());
     }
@@ -805,59 +870,59 @@ class ApplicationForLeaveFormViewControllerTest {
         final Person person = personWithRole(OFFICE);
 
         when(personService.getSignedInUser()).thenReturn(person);
-        when(applicationInteractionService.apply(any(), any(), any())).thenReturn(applicationWithId(applicationId));
+        when(applicationInteractionService.directAllow(any(), any(), any())).thenReturn(applicationWithId(applicationId));
+
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
 
         perform(post("/web/application")
-            .param("vacationType.category", "HOLIDAY")
-            .param("vacationType.requiresApproval", "true"))
+            .param("vacationType.id", "1")
+        )
             .andExpect(flash().attribute("applySuccess", true))
             .andExpect(status().isFound())
             .andExpect(redirectedUrl("/web/application/" + applicationId));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/web/application/new", "/web/application/21"})
+    @ValueSource(strings = {"/web/application/new", "/web/application/21/edit"})
     void ensureReplacementAddingForOtherPersonIsNotAllowedWhenMyRoleIsUser(String url) {
         final Person signedInUser = new Person();
-        signedInUser.setId(42);
+        signedInUser.setId(42L);
         signedInUser.setPermissions(List.of(USER));
         when(personService.getSignedInUser()).thenReturn(signedInUser);
 
         final Person person = new Person();
-        person.setId(1337);
-        when(personService.getPersonByID(1337)).thenReturn(Optional.of(person));
+        person.setId(1337L);
+        when(personService.getPersonByID(1337L)).thenReturn(Optional.of(person));
 
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person()));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(new Person()));
 
-        assertThatThrownBy(() -> {
-            perform(post(url)
-                .param("holidayReplacementToAdd", "1")
-                .param("person", "1337")
-                .param("vacationType.category", "HOLIDAY")
-                .param("holidayReplacements[0].person.id", "42")
-                .param("holidayReplacements[1].person.id", "1337")
-                .param("add-holiday-replacement", ""));
-        }).hasCauseInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> perform(post(url)
+            .param("holidayReplacementToAdd", "1")
+            .param("person", "1337")
+            .param("vacationType.id", "1")
+            .param("holidayReplacements[0].person.id", "42")
+            .param("holidayReplacements[1].person.id", "1337")
+            .param("add-holiday-replacement", ""))).hasCauseInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void ensureAjaxReplacementAddingForOtherPersonIsNotAllowedWhenMyRoleIsUser() {
         final Person signedInUser = new Person();
-        signedInUser.setId(42);
+        signedInUser.setId(42L);
         signedInUser.setPermissions(List.of(USER));
         when(personService.getSignedInUser()).thenReturn(signedInUser);
 
         final Person person = new Person();
-        person.setId(1337);
-        when(personService.getPersonByID(1337)).thenReturn(Optional.of(person));
+        person.setId(1337L);
+        when(personService.getPersonByID(1337L)).thenReturn(Optional.of(person));
 
-        when(personService.getPersonByID(1)).thenReturn(Optional.of(new Person()));
+        when(personService.getPersonByID(1L)).thenReturn(Optional.of(new Person()));
 
         assertThatThrownBy(() -> perform(post("/web/application/new/replacements")
             .header("X-Requested-With", "ajax")
             .param("holidayReplacementToAdd", "1")
             .param("person", "1337")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("holidayReplacements[0].person.id", "42")
             .param("holidayReplacements[1].person.id", "1337")
             .param("add-holiday-replacement", ""))).hasCauseInstanceOf(AccessDeniedException.class);
@@ -867,35 +932,45 @@ class ApplicationForLeaveFormViewControllerTest {
     void ensureAddingAnEmptyReplacementForNewApplicationDoesNotThrow() throws Exception {
 
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
-
+        signedInPerson.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
+
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
 
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
+
         when(settingsService.getSettings()).thenReturn(new Settings());
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post("/web/application/new")
-            .param("vacationType.category", "HOLIDAY")
-            .param("holidayReplacements[0].person.id", "42")
-            .param("holidayReplacements[1].person.id", "1337")
-            .param("add-holiday-replacement", ""));
-
-        perform
+        perform(
+            post("/web/application/new")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("holidayReplacements[0].person.id", "42")
+                .param("holidayReplacements[1].person.id", "1337")
+                .param("add-holiday-replacement", "")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("applicationForLeaveForm", allOf(
                 hasProperty("id", nullValue()),
                 hasProperty("holidayReplacements", allOf(
                     hasSize(2),
                     contains(
-                        hasProperty("person", hasProperty("id", is(42))),
-                        hasProperty("person", hasProperty("id", is(1337)))
+                        hasProperty("person", hasProperty("id", is(42L))),
+                        hasProperty("person", hasProperty("id", is(1337L)))
                     )
                 ))
             )))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
@@ -903,13 +978,13 @@ class ApplicationForLeaveFormViewControllerTest {
     void ensureAjaxAddingAnEmptyReplacementForNewApplicationReturnsEmptyTextResponse() throws Exception {
 
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
 
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
 
         final ResultActions perform = perform(post("/web/application/new/replacements")
             .header("X-Requested-With", "ajax")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("holidayReplacements[0].person.id", "42")
             .param("holidayReplacements[1].person.id", "1337")
             .param("holidayReplacementToAdd", ""));
@@ -922,45 +997,55 @@ class ApplicationForLeaveFormViewControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/web/application/new", "/web/application/21"})
+    @ValueSource(strings = {"/web/application/new", "/web/application/21/edit"})
     void ensureAddingReplacementRemovesItFromSelectables(String url) throws Exception {
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
 
         final Person leetPerson = new Person();
-        leetPerson.setId(1337);
+        leetPerson.setId(1337L);
 
         final Person replacmentPerson = new Person();
-        replacmentPerson.setId(42);
+        replacmentPerson.setId(42L);
 
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
-        when(personService.getPersonByID(42)).thenReturn(Optional.of(replacmentPerson));
+        when(personService.getPersonByID(42L)).thenReturn(Optional.of(replacmentPerson));
         when(personService.getActivePersons()).thenReturn(List.of(replacmentPerson, signedInPerson, leetPerson));
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
 
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
         when(settingsService.getSettings()).thenReturn(new Settings());
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post(url)
-            .param("vacationType.category", "HOLIDAY")
-            .param("add-holiday-replacement", "")
-            .param("holidayReplacementToAdd", "42"));
-
-        perform
+        perform(
+            post(url)
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("add-holiday-replacement", "")
+                .param("holidayReplacementToAdd", "42")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("applicationForLeaveForm", allOf(
                 hasProperty("id", nullValue()),
                 hasProperty("holidayReplacements", contains(
-                    hasProperty("person", hasProperty("id", is(42)))
+                    hasProperty("person", hasProperty("id", is(42L)))
                 ))
             )))
             .andExpect(model().attribute("selectableHolidayReplacements", contains(
-                hasProperty("personId", is(1337))
+                hasProperty("personId", is(1337L))
             )))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
@@ -968,24 +1053,23 @@ class ApplicationForLeaveFormViewControllerTest {
     void ensureAjaxAddingReplacementForNewApplication() throws Exception {
 
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
 
         final Person replacementPerson = new Person();
-        replacementPerson.setId(42);
-        when(personService.getPersonByID(42)).thenReturn(Optional.of(replacementPerson));
+        replacementPerson.setId(42L);
+        when(personService.getPersonByID(42L)).thenReturn(Optional.of(replacementPerson));
 
-        final ResultActions perform = perform(post("/web/application/new/replacements")
+        perform(post("/web/application/new/replacements")
             .header("X-Requested-With", "ajax")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("holidayReplacements[0].person.id", "1337")
             .param("holidayReplacements[1].person.id", "21")
-            .param("holidayReplacementToAdd", "42"));
-
-        perform
+            .param("holidayReplacementToAdd", "42")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("holidayReplacement", allOf(
-                hasProperty("person", hasProperty("id", is(42))),
+                hasProperty("person", hasProperty("id", is(42L))),
                 hasProperty("note", nullValue())
             )))
             .andExpect(model().attribute("index", is(2)))
@@ -997,100 +1081,113 @@ class ApplicationForLeaveFormViewControllerTest {
     void ensureAjaxAddingReplacementForExistingApplication() throws Exception {
 
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
 
         final Person replacementPerson = new Person();
-        replacementPerson.setId(42);
-        when(personService.getPersonByID(42)).thenReturn(Optional.of(replacementPerson));
+        replacementPerson.setId(42L);
+        when(personService.getPersonByID(42L)).thenReturn(Optional.of(replacementPerson));
 
-        final ResultActions perform = perform(post("/web/application/7/replacements")
+        perform(post("/web/application/7/replacements")
             .header("X-Requested-With", "ajax")
             .param("id", "7")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("holidayReplacements[0].person.id", "1337")
             .param("holidayReplacements[1].person.id", "21")
-            .param("holidayReplacementToAdd", "42"));
-
-        perform
+            .param("holidayReplacementToAdd", "42")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("holidayReplacement", allOf(
-                hasProperty("person", hasProperty("id", is(42))),
+                hasProperty("person", hasProperty("id", is(42L))),
                 hasProperty("note", nullValue())
             )))
             .andExpect(model().attribute("index", is(2)))
-            .andExpect(model().attribute("deleteButtonFormActionValue", is("/web/application/7")))
+            .andExpect(model().attribute("deleteButtonFormActionValue", is("/web/application/7/edit")))
             .andExpect(view().name("application/application-form :: replacement-item"));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"/web/application/new", "/web/application/21"})
+    @ValueSource(strings = {"/web/application/new", "/web/application/21/edit"})
     void ensureReplacementDeletionForOtherPersonIsNotAllowedWhenMyRoleIsUser(String url) {
         final Person signedInUser = new Person();
-        signedInUser.setId(42);
+        signedInUser.setId(42L);
         signedInUser.setPermissions(List.of(USER));
         when(personService.getSignedInUser()).thenReturn(signedInUser);
 
         final Person person = new Person();
-        person.setId(1337);
-        when(personService.getPersonByID(1337)).thenReturn(Optional.of(person));
+        person.setId(1337L);
+        when(personService.getPersonByID(1337L)).thenReturn(Optional.of(person));
 
-        assertThatThrownBy(() -> {
-            perform(post(url)
-                .param("remove-holiday-replacement", "1")
-                .param("person", "1337")
-                .param("vacationType.category", "HOLIDAY"));
-        }).hasCauseInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> perform(post(url)
+            .param("remove-holiday-replacement", "1")
+            .param("person", "1337")
+            .param("vacationType.id", "1"))).hasCauseInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void ensureReplacementDeletionForNewApplicationRemovesPersonFromHolidayReplacements() throws Exception {
 
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
-
+        signedInPerson.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
+
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .messageKey("message-key")
+            .build();
 
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
+
         when(settingsService.getSettings()).thenReturn(new Settings());
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post("/web/application/new")
-            .param("vacationType.category", "HOLIDAY")
-            .param("holidayReplacements[0].person.id", "42")
-            .param("holidayReplacements[1].person.id", "1337")
-            .param("holidayReplacements[2].person.id", "21")
-            .param("remove-holiday-replacement", "1337"));
-
-        perform
+        perform(
+            post("/web/application/new")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("holidayReplacements[0].person.id", "42")
+                .param("holidayReplacements[1].person.id", "1337")
+                .param("holidayReplacements[2].person.id", "21")
+                .param("remove-holiday-replacement", "1337")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("applicationForLeaveForm", allOf(
                 hasProperty("id", nullValue()),
                 hasProperty("holidayReplacements", contains(
-                    hasProperty("person", hasProperty("id", is(42))),
-                    hasProperty("person", hasProperty("id", is(21)))
+                    hasProperty("person", hasProperty("id", is(42L))),
+                    hasProperty("person", hasProperty("id", is(21L)))
                 ))
             )))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
     @Test
     void ensureReplacementDeletionForNewApplicationAddsTheRemovedPersonToSelectableHolidayReplacements() throws Exception {
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
 
         final Person bruce = new Person();
-        bruce.setId(42);
+        bruce.setId(42L);
 
         final Person clark = new Person();
-        clark.setId(1337);
+        clark.setId(1337L);
 
         final Person joker = new Person();
-        joker.setId(21);
+        joker.setId(21L);
 
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
         when(personService.getActivePersons()).thenReturn(List.of(signedInPerson, bruce, clark, joker));
@@ -1098,20 +1195,23 @@ class ApplicationForLeaveFormViewControllerTest {
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
+
         when(settingsService.getSettings()).thenReturn(new Settings());
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post("/web/application/new")
-            .param("vacationType.category", "HOLIDAY")
-            .param("holidayReplacements[0].person.id", "42")
-            .param("holidayReplacements[1].person.id", "1337")
-            .param("holidayReplacements[2].person.id", "21")
-            .param("remove-holiday-replacement", "1337"));
-
-        perform
+        perform(
+            post("/web/application/new")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("holidayReplacements[0].person.id", "42")
+                .param("holidayReplacements[1].person.id", "1337")
+                .param("holidayReplacements[2].person.id", "21")
+                .param("remove-holiday-replacement", "1337")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("applicationForLeaveForm", hasProperty("id", nullValue())))
             .andExpect(model().attribute("selectableHolidayReplacements", contains(
-                hasProperty("personId", is(1337))
+                hasProperty("personId", is(1337L))
             )))
             .andExpect(view().name("application/application_form"));
     }
@@ -1119,10 +1219,18 @@ class ApplicationForLeaveFormViewControllerTest {
     @Test
     void editApplicationForm() throws Exception {
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
         when(personService.getActivePersons()).thenReturn(List.of(person));
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
 
         final int year = Year.now(clock).getValue();
         final LocalDate validFrom = LocalDate.of(2014, JANUARY, 1);
@@ -1134,41 +1242,91 @@ class ApplicationForLeaveFormViewControllerTest {
         final Settings settings = new Settings();
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setPerson(person);
         application.setId(applicationId);
         application.setStatus(WAITING);
-        application.setVacationType(createVacationTypeEntity(HOLIDAY));
+        application.setVacationType(vacationType);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
 
-        perform(get("/web/application/1/edit"))
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
+
+        perform(
+            get("/web/application/1/edit")
+                .locale(locale)
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("noHolidaysAccount", is(false)))
             .andExpect(model().attribute("showHalfDayOption", is(true)))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
     @Test
-    void editApplicationFormForAnotherUserIsDenied() {
+    void editApplicationFormForOtherWithOfficePermission() throws Exception {
+
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
+        final Person person = new Person();
+        person.setPermissions(List.of(USER, OFFICE));
+        when(personService.getSignedInUser()).thenReturn(person);
+        when(personService.getActivePersons()).thenReturn(List.of(person));
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
+
+        final int year = Year.now(clock).getValue();
+        final LocalDate validFrom = LocalDate.of(2014, JANUARY, 1);
+        final LocalDate validTo = LocalDate.of(2014, DECEMBER, 31);
+        final LocalDate expireDate = LocalDate.of(2014, APRIL, 1);
+        final Account account = new Account(person, validFrom, validTo, true, expireDate, TEN, TEN, TEN, "comment");
+        when(accountService.getHolidaysAccount(year, person)).thenReturn(Optional.of(account));
+
+        final Settings settings = new Settings();
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        final Long applicationId = 1L;
+        final Application application = new Application();
+        application.setPerson(person);
+        application.setId(applicationId);
+        application.setStatus(ALLOWED);
+        application.setVacationType(vacationType);
+        when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
+
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
+
+        perform(
+            get("/web/application/1/edit")
+                .locale(locale)
+        )
+            .andExpect(status().isOk())
+            .andExpect(view().name("application/application_form"));
+    }
+
+    @Test
+    void editApplicationFormForAnotherUserIsDenied() throws Exception {
 
         final Person signedInUser = new Person();
-        signedInUser.setId(1);
+        signedInUser.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInUser);
 
         final Person person = new Person();
-        person.setId(2);
+        person.setId(2L);
         final Application application = new Application();
         application.setPerson(person);
-        application.setId(1);
+        application.setId(1L);
         application.setStatus(WAITING);
-        application.setVacationType(createVacationTypeEntity(HOLIDAY));
-        when(applicationInteractionService.get(1)).thenReturn(Optional.of(application));
+        application.setVacationType(createVacationType(1L, HOLIDAY, new StaticMessageSource()));
+        when(applicationInteractionService.get(1L)).thenReturn(Optional.of(application));
 
-        assertThatThrownBy(() ->
-            perform(get("/web/application/1/edit"))
-        ).hasCauseInstanceOf(AccessDeniedException.class);
+        perform(get("/web/application/1/edit"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("application/application-not-editable"));
     }
 
     @Test
@@ -1177,6 +1335,14 @@ class ApplicationForLeaveFormViewControllerTest {
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
         when(personService.getActivePersons()).thenReturn(List.of(person));
+
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
 
         final int year = Year.now(clock).getValue();
         final LocalDate validFrom = LocalDate.of(2014, JANUARY, 1);
@@ -1191,15 +1357,20 @@ class ApplicationForLeaveFormViewControllerTest {
         settings.setApplicationSettings(appSettings);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setPerson(person);
         application.setId(applicationId);
         application.setStatus(WAITING);
-        application.setVacationType(createVacationTypeEntity(HOLIDAY));
+        application.setVacationType(vacationType);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
 
-        perform(get("/web/application/1/edit"))
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
+
+        perform(
+            get("/web/application/1/edit")
+                .locale(locale)
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("noHolidaysAccount", is(false)))
             .andExpect(view().name("application/application_form"))
@@ -1213,6 +1384,14 @@ class ApplicationForLeaveFormViewControllerTest {
         when(personService.getSignedInUser()).thenReturn(person);
         when(personService.getActivePersons()).thenReturn(List.of(person));
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final int year = Year.now(clock).getValue();
         final LocalDate validFrom = LocalDate.of(2014, JANUARY, 1);
         final LocalDate validTo = LocalDate.of(2014, DECEMBER, 31);
@@ -1226,16 +1405,21 @@ class ApplicationForLeaveFormViewControllerTest {
         settings.setApplicationSettings(appSettings);
         when(settingsService.getSettings()).thenReturn(settings);
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setPerson(person);
         application.setId(applicationId);
         application.setStatus(WAITING);
         application.setDayLength(DayLength.MORNING);
-        application.setVacationType(createVacationTypeEntity(HOLIDAY));
+        application.setVacationType(vacationType);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
 
-        perform(get("/web/application/1/edit"))
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
+
+        perform(
+            get("/web/application/1/edit")
+                .locale(locale)
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("noHolidaysAccount", is(false)))
             .andExpect(view().name("application/application_form"))
@@ -1246,25 +1430,11 @@ class ApplicationForLeaveFormViewControllerTest {
     @Test
     void ensureUnknownApplicationEditingShowsNotEditablePage() throws Exception {
 
-        when(applicationInteractionService.get(1)).thenReturn(Optional.empty());
+        when(applicationInteractionService.get(1L)).thenReturn(Optional.empty());
 
         perform(get("/web/application/1/edit"))
             .andExpect(status().isOk())
-            .andExpect(view().name("application/application-notwaiting"));
-    }
-
-    @Test
-    void editApplicationFormNotWaiting() throws Exception {
-
-        final Integer applicationId = 1;
-        final Application application = new Application();
-        application.setId(applicationId);
-        application.setStatus(ALLOWED);
-        when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
-
-        perform(get("/web/application/1/edit"))
-            .andExpect(status().isOk())
-            .andExpect(view().name("application/application-notwaiting"));
+            .andExpect(view().name("application/application-not-editable"));
     }
 
     @Test
@@ -1273,18 +1443,29 @@ class ApplicationForLeaveFormViewControllerTest {
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final int year = Year.now(clock).getValue();
         when(accountService.getHolidaysAccount(year, person)).thenReturn(Optional.empty());
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setPerson(person);
         application.setId(applicationId);
         application.setStatus(WAITING);
-        application.setVacationType(createVacationTypeEntity(HOLIDAY));
+        application.setVacationType(vacationType);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
 
-        perform(get("/web/application/1/edit"))
+        perform(
+            get("/web/application/1/edit")
+                .locale(locale)
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("noHolidaysAccount", is(true)))
             .andExpect(view().name("application/application_form"));
@@ -1294,88 +1475,116 @@ class ApplicationForLeaveFormViewControllerTest {
     void ensureAddingAnEmptyReplacementToEditedApplicationDoesNotThrow() throws Exception {
 
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
-
+        signedInPerson.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
+
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
 
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
+
         when(settingsService.getSettings()).thenReturn(new Settings());
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post("/web/application/7")
-            .param("vacationType.category", "HOLIDAY")
-            .param("id", "7")
-            .param("holidayReplacements[0].person.id", "42")
-            .param("holidayReplacements[1].person.id", "1337")
-            .param("add-holiday-replacement", ""));
-
-        perform
+        perform(
+            post("/web/application/7/edit")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("id", "7")
+                .param("holidayReplacements[0].person.id", "42")
+                .param("holidayReplacements[1].person.id", "1337")
+                .param("add-holiday-replacement", "")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("applicationForLeaveForm", allOf(
-                hasProperty("id", is(7)),
+                hasProperty("id", is(7L)),
                 hasProperty("holidayReplacements", allOf(
                     hasSize(2),
                     contains(
-                        hasProperty("person", hasProperty("id", is(42))),
-                        hasProperty("person", hasProperty("id", is(1337)))
+                        hasProperty("person", hasProperty("id", is(42L))),
+                        hasProperty("person", hasProperty("id", is(1337L)))
                     )
                 ))
             )))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
     @Test
     void ensureReplacementDeletionForEditedApplicationRemovesPersonFromHolidayReplacements() throws Exception {
 
-        final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
 
+        final Person signedInPerson = new Person();
+        signedInPerson.setId(1L);
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
-        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1, ORANGE)));
 
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
+
         when(settingsService.getSettings()).thenReturn(new Settings());
+        when(vacationTypeViewModelService.getVacationTypeColors()).thenReturn(List.of(new VacationTypeDto(1L, ORANGE)));
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post("/web/application/7")
-            .param("vacationType.category", "HOLIDAY")
-            .param("id", "7")
-            .param("holidayReplacements[0].person.id", "42")
-            .param("holidayReplacements[1].person.id", "1337")
-            .param("holidayReplacements[2].person.id", "21")
-            .param("remove-holiday-replacement", "1337"));
-
-        perform
+        perform(
+            post("/web/application/7/edit")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("id", "7")
+                .param("holidayReplacements[0].person.id", "42")
+                .param("holidayReplacements[1].person.id", "1337")
+                .param("holidayReplacements[2].person.id", "21")
+                .param("remove-holiday-replacement", "1337")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attribute("applicationForLeaveForm", allOf(
-                hasProperty("id", is(7)),
+                hasProperty("id", is(7L)),
                 hasProperty("holidayReplacements", contains(
-                    hasProperty("person", hasProperty("id", is(42))),
-                    hasProperty("person", hasProperty("id", is(21)))
+                    hasProperty("person", hasProperty("id", is(42L))),
+                    hasProperty("person", hasProperty("id", is(21L)))
                 ))
             )))
-            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1, ORANGE)))))
+            .andExpect(model().attribute("vacationTypeColors", equalTo(List.of(new VacationTypeDto(1L, ORANGE)))))
             .andExpect(view().name("application/application_form"));
     }
 
     @Test
     void ensureReplacementDeletionForEditedApplicationAddsTheRemovedPersonToSelectableHolidayReplacements() throws Exception {
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
 
         final Person bruce = new Person();
-        bruce.setId(42);
+        bruce.setId(42L);
 
         final Person clark = new Person();
-        clark.setId(1337);
+        clark.setId(1337L);
 
         final Person joker = new Person();
-        joker.setId(21);
+        joker.setId(21L);
 
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
         when(personService.getActivePersons()).thenReturn(List.of(signedInPerson, bruce, clark, joker));
@@ -1383,21 +1592,24 @@ class ApplicationForLeaveFormViewControllerTest {
         final LocalDate now = LocalDate.now(clock);
         final Account account = new Account(signedInPerson, now, now, true, LocalDate.of(now.getYear(), APRIL, 1), ZERO, ZERO, ZERO, "");
         when(accountService.getHolidaysAccount(now.getYear(), signedInPerson)).thenReturn(Optional.of(account));
+
         when(settingsService.getSettings()).thenReturn(new Settings());
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        final ResultActions perform = perform(post("/web/application/7")
-            .param("vacationType.category", "HOLIDAY")
-            .param("id", "7")
-            .param("holidayReplacements[0].person.id", "42")
-            .param("holidayReplacements[1].person.id", "1337")
-            .param("holidayReplacements[2].person.id", "21")
-            .param("remove-holiday-replacement", "1337"));
-
-        perform
+        perform(
+            post("/web/application/7/edit")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("id", "7")
+                .param("holidayReplacements[0].person.id", "42")
+                .param("holidayReplacements[1].person.id", "1337")
+                .param("holidayReplacements[2].person.id", "21")
+                .param("remove-holiday-replacement", "1337")
+        )
             .andExpect(status().isOk())
-            .andExpect(model().attribute("applicationForLeaveForm", hasProperty("id", is(7))))
+            .andExpect(model().attribute("applicationForLeaveForm", hasProperty("id", is(7L))))
             .andExpect(model().attribute("selectableHolidayReplacements", contains(
-                hasProperty("personId", is(1337))
+                hasProperty("personId", is(1337L))
             )))
             .andExpect(view().name("application/application_form"));
     }
@@ -1408,22 +1620,26 @@ class ApplicationForLeaveFormViewControllerTest {
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setStatus(WAITING);
+        application.setPerson(person);
 
         final Application editedApplication = new Application();
         editedApplication.setId(applicationId);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
         when(applicationInteractionService.edit(eq(application), any(Application.class), eq(person), eq(Optional.of("comment")))).thenReturn(editedApplication);
 
-        perform(post("/web/application/1")
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
+
+        perform(post("/web/application/1/edit")
             .param("person.id", "1")
             .param("startDate", "28.10.2020")
             .param("endDate", "28.10.2020")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
-            .param("comment", "comment"))
+            .param("comment", "comment")
+        )
             .andExpect(status().is3xxRedirection())
             .andExpect(redirectedUrl("/web/application/1"));
     }
@@ -1435,22 +1651,26 @@ class ApplicationForLeaveFormViewControllerTest {
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setStatus(WAITING);
+        application.setPerson(person);
 
         final Application editedApplication = new Application();
         editedApplication.setId(applicationId);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
         when(applicationInteractionService.edit(eq(application), any(Application.class), eq(person), eq(Optional.of("comment")))).thenReturn(editedApplication);
 
-        perform(post("/web/application/1")
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
+
+        perform(post("/web/application/1/edit")
             .param("person.id", "1")
             .param("startDate", givenDate)
             .param("endDate", givenDate)
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
-            .param("comment", "comment"))
+            .param("comment", "comment")
+        )
             .andExpect(status().is3xxRedirection())
             .andExpect(redirectedUrl("/web/application/1"));
     }
@@ -1458,19 +1678,24 @@ class ApplicationForLeaveFormViewControllerTest {
     @Test
     void sendEditApplicationFormIsNotWaiting() throws Exception {
 
-        final Integer applicationId = 1;
+        final Person person = new Person();
+        when(personService.getSignedInUser()).thenReturn(person);
+
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setId(applicationId);
         application.setStatus(ALLOWED);
+        application.setPerson(person);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
 
-        perform(post("/web/application/1")
+        perform(post("/web/application/1/edit")
             .param("person.id", "1")
             .param("startDate", "28.10.2020")
             .param("endDate", "28.10.2020")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
-            .param("comment", "comment"))
+            .param("comment", "comment")
+        )
             .andExpect(status().is3xxRedirection())
             .andExpect(redirectedUrl("/web/application/1"))
             .andExpect(flash().attribute("editError", true));
@@ -1479,18 +1704,18 @@ class ApplicationForLeaveFormViewControllerTest {
     @Test
     void sendEditApplicationFormApplicationNotFound() {
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setId(applicationId);
         application.setStatus(WAITING);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-            perform(post("/web/application/1")
+            perform(post("/web/application/1/edit")
                 .param("person.id", "1")
                 .param("startDate", "28.10.2020")
                 .param("endDate", "28.10.2020")
-                .param("vacationType.category", "HOLIDAY")
+                .param("vacationType.id", "1")
                 .param("dayLength", "FULL")
                 .param("comment", "comment"))
         ).hasCauseInstanceOf(UnknownApplicationForLeaveException.class);
@@ -1502,37 +1727,54 @@ class ApplicationForLeaveFormViewControllerTest {
         final Person person = new Person();
         when(personService.getSignedInUser()).thenReturn(person);
 
-        final Integer applicationId = 1;
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setStatus(WAITING);
+        application.setPerson(person);
         final Application editedApplication = new Application();
         editedApplication.setId(applicationId);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
         when(applicationInteractionService.edit(eq(application), any(Application.class), eq(person), eq(Optional.of("comment")))).thenThrow(EditApplicationForLeaveNotAllowedException.class);
 
-        perform(post("/web/application/1")
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(anyVacationType(1L)));
+
+        perform(post("/web/application/1/edit")
             .param("person.id", "1")
             .param("startDate", "28.10.2020")
             .param("endDate", "28.10.2020")
-            .param("vacationType.category", "HOLIDAY")
+            .param("vacationType.id", "1")
             .param("dayLength", "FULL")
-            .param("comment", "comment"))
+            .param("comment", "comment")
+        )
             .andExpect(status().isOk())
-            .andExpect(view().name("application/application-notwaiting"));
+            .andExpect(view().name("application/application-not-editable"));
     }
 
     @Test
     void sendEditApplicationFormHasErrors() throws Exception {
 
-        final Integer applicationId = 1;
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
+        final Person person = new Person();
+
+        final Long applicationId = 1L;
         final Application application = new Application();
         application.setId(applicationId);
         application.setStatus(WAITING);
+        application.setPerson(person);
         when(applicationInteractionService.get(applicationId)).thenReturn(Optional.of(application));
-        when(personService.getSignedInUser()).thenReturn(new Person());
+        when(personService.getSignedInUser()).thenReturn(person);
 
         final Settings settings = new Settings();
         when(settingsService.getSettings()).thenReturn(settings);
+
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
         doAnswer(invocation -> {
             final Errors errors = invocation.getArgument(1);
@@ -1541,13 +1783,16 @@ class ApplicationForLeaveFormViewControllerTest {
             return null;
         }).when(applicationForLeaveFormValidator).validate(any(), any());
 
-        perform(post("/web/application/1")
-            .param("person.id", "1")
-            .param("startDate", "28.10.2020")
-            .param("endDate", "28.10.2020")
-            .param("vacationType.category", "HOLIDAY")
-            .param("dayLength", "FULL")
-            .param("comment", "comment"))
+        perform(
+            post("/web/application/1/edit")
+                .locale(locale)
+                .param("person.id", "1")
+                .param("startDate", "28.10.2020")
+                .param("endDate", "28.10.2020")
+                .param("vacationType.id", "1")
+                .param("dayLength", "FULL")
+                .param("comment", "comment")
+        )
             .andExpect(status().isOk())
             .andExpect(view().name("application/application_form"))
             .andExpect(model().attribute("showHalfDayOption", is(true)));
@@ -1561,18 +1806,26 @@ class ApplicationForLeaveFormViewControllerTest {
             return null;
         }).when(applicationForLeaveFormValidator).validate(any(), any());
 
+        final Locale locale = GERMAN;
+        final MessageSource messageSource = messageSourceForVacationType("message-key", "label", locale);
+        final VacationType<?> vacationType = ProvidedVacationType.builder(messageSource)
+            .id(1L)
+            .category(HOLIDAY)
+            .messageKey("message-key")
+            .build();
+
         final Person signedInPerson = new Person();
-        signedInPerson.setId(1);
+        signedInPerson.setId(1L);
         signedInPerson.setPermissions(List.of(USER, OFFICE));
 
         final Person bruce = new Person();
-        bruce.setId(42);
+        bruce.setId(42L);
 
         final Person clark = new Person();
-        clark.setId(1337);
+        clark.setId(1337L);
 
         final Person joker = new Person();
-        joker.setId(21);
+        joker.setId(21L);
 
         when(personService.getSignedInUser()).thenReturn(signedInPerson);
         when(personService.getActivePersons()).thenReturn(List.of(signedInPerson, bruce, clark, joker));
@@ -1580,23 +1833,27 @@ class ApplicationForLeaveFormViewControllerTest {
         when(settingsService.getSettings()).thenReturn(new Settings());
 
         final Application application = new Application();
-        application.setId(7);
+        application.setId(7L);
+        application.setPerson(signedInPerson);
         application.setApplier(signedInPerson);
         application.setStatus(WAITING);
-        when(applicationInteractionService.get(7)).thenReturn(Optional.of(application));
+        when(applicationInteractionService.get(7L)).thenReturn(Optional.of(application));
 
-        final ResultActions perform = perform(post("/web/application/7")
-            .param("vacationType.category", "HOLIDAY")
-            .param("person.id", "1")
-            .param("id", "7"));
+        when(vacationTypeService.getById(1L)).thenReturn(Optional.of(vacationType));
 
-        perform
+        perform(
+            post("/web/application/7/edit")
+                .locale(locale)
+                .param("vacationType.id", "1")
+                .param("person.id", "1")
+                .param("id", "7")
+        )
             .andExpect(status().isOk())
             .andExpect(model().attributeHasFieldErrors("applicationForLeaveForm", "startDate"))
             .andExpect(model().attribute("selectableHolidayReplacements", contains(
-                hasProperty("personId", is(42)),
-                hasProperty("personId", is(1337)),
-                hasProperty("personId", is(21))
+                hasProperty("personId", is(42L)),
+                hasProperty("personId", is(1337L)),
+                hasProperty("personId", is(21L))
             )))
             .andExpect(view().name("application/application_form"));
     }
@@ -1608,7 +1865,7 @@ class ApplicationForLeaveFormViewControllerTest {
         return person;
     }
 
-    private Person personWithId(int id) {
+    private Person personWithId(long id) {
         final Person person = new Person();
         person.setId(id);
 
@@ -1617,21 +1874,40 @@ class ApplicationForLeaveFormViewControllerTest {
 
     private Application someApplication() {
 
-        final VacationType holidayType = new VacationType(1000, true, HOLIDAY, "application.data.vacationType.holiday", true, YELLOW, false);
+        final VacationType<?> holidayType = ProvidedVacationType.builder(new StaticMessageSource())
+            .id(1L)
+            .active(true)
+            .category(HOLIDAY)
+            .messageKey("application.data.vacationType.holiday")
+            .requiresApprovalToApply(true)
+            .requiresApprovalToCancel(true)
+            .color(YELLOW)
+            .visibleToEveryone(false)
+            .build();
 
         final Application application = new Application();
-        application.setVacationType(convert(holidayType));
+        application.setVacationType(holidayType);
         application.setStartDate(LocalDate.now().plusDays(10));
         application.setEndDate(LocalDate.now().plusDays(20));
 
         return new Application();
     }
 
-    private Application applicationWithId(int id) {
+    private VacationType<?> anyVacationType(Long id) {
+        return ProvidedVacationType.builder(new StaticMessageSource()).id(id).build();
+    }
+
+    private Application applicationWithId(long id) {
         final Application application = someApplication();
         application.setId(id);
 
         return application;
+    }
+
+    private MessageSource messageSourceForVacationType(String messageKey, String label, Locale locale) {
+        final MessageSource messageSource = mock(MessageSource.class);
+        when(messageSource.getMessage(messageKey, new Object[]{}, locale)).thenReturn(label);
+        return messageSource;
     }
 
     private ResultActions perform(MockHttpServletRequestBuilder builder) throws Exception {

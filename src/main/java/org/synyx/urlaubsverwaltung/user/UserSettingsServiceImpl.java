@@ -1,5 +1,7 @@
 package org.synyx.urlaubsverwaltung.user;
 
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.springframework.context.event.EventListener;
 import org.springframework.lang.Nullable;
@@ -13,8 +15,6 @@ import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
 import org.synyx.urlaubsverwaltung.person.PersonService;
 
-import javax.servlet.ServletRequest;
-import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +24,6 @@ import static java.lang.invoke.MethodHandles.lookup;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
 import static org.slf4j.LoggerFactory.getLogger;
-import static org.synyx.urlaubsverwaltung.security.AuthenticationHelper.userName;
 
 @Service
 class UserSettingsServiceImpl implements UserSettingsService {
@@ -44,12 +43,12 @@ class UserSettingsServiceImpl implements UserSettingsService {
 
     @EventListener
     void delete(PersonDeletedEvent event) {
-        userSettingsRepository.deleteByPerson(event.getPerson());
+        userSettingsRepository.deleteByPerson(event.person());
     }
 
     @EventListener
     void handleAuthenticationSuccess(AuthenticationSuccessEvent event) {
-        final String userName = userName(event.getAuthentication());
+        final String userName = event.getAuthentication().getName();
         final Optional<Person> maybePerson = personService.getPersonByUsername(userName);
 
         getRequest()
@@ -123,7 +122,7 @@ class UserSettingsServiceImpl implements UserSettingsService {
 
     @Override
     public Map<Person, Locale> getEffectiveLocale(List<Person> persons) {
-        final List<Integer> personIds = persons.stream().map(Person::getId).collect(toList());
+        final List<Long> personIds = persons.stream().map(Person::getId).collect(toList());
         final Map<Person, Locale> personLocale = userSettingsRepository.findByPersonIdIn(personIds).stream()
             .collect(toMap(
                 UserSettingsEntity::getPerson,

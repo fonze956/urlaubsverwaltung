@@ -14,9 +14,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
+import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
 import org.synyx.urlaubsverwaltung.person.Person;
-import org.synyx.urlaubsverwaltung.person.PersonId;
 import org.synyx.urlaubsverwaltung.person.PersonDeletedEvent;
+import org.synyx.urlaubsverwaltung.person.PersonId;
 import org.synyx.urlaubsverwaltung.person.Role;
 import org.synyx.urlaubsverwaltung.search.PageableSearchQuery;
 
@@ -39,8 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -48,8 +48,7 @@ import static org.mockito.Mockito.when;
 import static org.synyx.urlaubsverwaltung.TestDataCreator.createDepartment;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.REJECTED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
 import static org.synyx.urlaubsverwaltung.person.Role.BOSS;
 import static org.synyx.urlaubsverwaltung.person.Role.DEPARTMENT_HEAD;
 import static org.synyx.urlaubsverwaltung.person.Role.INACTIVE;
@@ -80,18 +79,18 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonReturnsPageOfDistinctActivePersonsForDepartmentHeadAndSecondStageAuthority() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         final DepartmentMemberEmbeddable maxMember = new DepartmentMemberEmbeddable();
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
@@ -116,18 +115,18 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonReturnsPageOfDistinctActivePersonsForDepartmentHead() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         final DepartmentMemberEmbeddable maxMember = new DepartmentMemberEmbeddable();
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
@@ -152,18 +151,18 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonReturnsPageOfDistinctActivePersonsForSecondStageAuthority() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         final DepartmentMemberEmbeddable maxMember = new DepartmentMemberEmbeddable();
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
@@ -188,7 +187,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonReturnsPageOfEmptyList() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of());
 
         final Page<Person> actual = sut.getManagedMembersOfPerson(person, defaultPersonSearchQuery());
@@ -202,18 +201,18 @@ class DepartmentServiceImplTest {
     void ensureGetManagedActiveMembersOfPersonReturnsDistinctActivePersonsForDepartmentHeadAndSecondStageAuthority() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         final DepartmentMemberEmbeddable maxMember = new DepartmentMemberEmbeddable();
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
@@ -238,18 +237,18 @@ class DepartmentServiceImplTest {
     void ensureGetManagedActiveMembersOfPersonReturnsDistinctActivePersonsForDepartmentHead() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         final DepartmentMemberEmbeddable maxMember = new DepartmentMemberEmbeddable();
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
@@ -274,18 +273,18 @@ class DepartmentServiceImplTest {
     void ensureGetManagedActiveMembersOfPersonReturnsDistinctActivePersonsForSecondStageAuthority() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         final DepartmentMemberEmbeddable maxMember = new DepartmentMemberEmbeddable();
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
@@ -310,7 +309,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedActiveMembersOfPersonReturnsEmptyList() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of());
 
         final List<Person> actual = sut.getManagedActiveMembersOfPerson(person);
@@ -323,11 +322,11 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonReturnsDistinctInactivePersonsForDepartmentHeadAndSecondStageAuthority() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         max.setPermissions(List.of(INACTIVE));
@@ -335,14 +334,14 @@ class DepartmentServiceImplTest {
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
         janeMember.setPerson(jane);
 
         final Person john = new Person();
-        john.setId(4);
+        john.setId(4L);
         john.setFirstName("John");
         john.setLastName("Doe");
         john.setPermissions(List.of(INACTIVE));
@@ -368,11 +367,11 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonReturnsDistinctInactivePersonsForDepartmentHead() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         max.setPermissions(List.of(INACTIVE));
@@ -380,14 +379,14 @@ class DepartmentServiceImplTest {
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
         janeMember.setPerson(jane);
 
         final Person john = new Person();
-        john.setId(4);
+        john.setId(4L);
         john.setFirstName("John");
         john.setLastName("Doe");
         john.setPermissions(List.of(INACTIVE));
@@ -413,11 +412,11 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonReturnsDistinctInactivePersonsForSecondStageAuthority() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final Person max = new Person();
-        max.setId(2);
+        max.setId(2L);
         max.setFirstName("Max");
         max.setLastName("Mustermann");
         max.setPermissions(List.of(INACTIVE));
@@ -425,14 +424,14 @@ class DepartmentServiceImplTest {
         maxMember.setPerson(max);
 
         final Person jane = new Person();
-        jane.setId(3);
+        jane.setId(3L);
         jane.setFirstName("Jane");
         jane.setLastName("Doe");
         final DepartmentMemberEmbeddable janeMember = new DepartmentMemberEmbeddable();
         janeMember.setPerson(jane);
 
         final Person john = new Person();
-        john.setId(4);
+        john.setId(4L);
         john.setFirstName("John");
         john.setLastName("Doe");
         john.setPermissions(List.of(INACTIVE));
@@ -458,7 +457,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonReturnsEmptyList() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of());
 
         final Page<Person> actual = sut.getManagedInactiveMembersOfPerson(person, defaultPersonSearchQuery());
@@ -471,14 +470,14 @@ class DepartmentServiceImplTest {
     void ensureGetManagedActiveMembersOfPersonReturnsPageSecond() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final List<DepartmentMemberEmbeddable> activeMembers =
             anyDepartmentMembers(14, 1, p -> p.setPermissions(List.of(USER)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(activeMembers);
 
         when(departmentRepository.findByDepartmentHeads(person)).thenReturn(List.of(departmentEntity));
@@ -497,14 +496,14 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonReturnsPageSecond() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final List<DepartmentMemberEmbeddable> inactiveMembers =
             anyDepartmentMembers(14, 1, p -> p.setPermissions(List.of(INACTIVE)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(inactiveMembers);
 
         when(departmentRepository.findByDepartmentHeads(person)).thenReturn(List.of(departmentEntity));
@@ -524,22 +523,22 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentForRole(Role role) {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(role));
 
         final Person member = new Person();
-        member.setId(2);
+        member.setId(2L);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(member)));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(1);
         assertThat(actual.getPageable().getPageNumber()).isZero();
@@ -550,24 +549,24 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentForDepartmentHead() {
 
         final Person departmentHead = new Person();
-        departmentHead.setId(1);
+        departmentHead.setId(1L);
         departmentHead.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final Person inactiveMember = new Person();
-        inactiveMember.setId(2);
+        inactiveMember.setId(2L);
         inactiveMember.setPermissions(List.of(INACTIVE));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(inactiveMember)));
         departmentEntity.setDepartmentHeads(List.of(departmentHead));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(departmentHead, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(departmentHead, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(1);
         assertThat(actual.getPageable().getPageNumber()).isZero();
@@ -578,24 +577,24 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentForSecondStageAuthority() {
 
         final Person secondStageAuthority = new Person();
-        secondStageAuthority.setId(1);
+        secondStageAuthority.setId(1L);
         secondStageAuthority.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final Person inactiveMember = new Person();
-        inactiveMember.setId(2);
+        inactiveMember.setId(2L);
         inactiveMember.setPermissions(List.of(INACTIVE));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(inactiveMember)));
         departmentEntity.setSecondStageAuthorities(List.of(secondStageAuthority));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(secondStageAuthority, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(secondStageAuthority, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(1);
         assertThat(actual.getPageable().getPageNumber()).isZero();
@@ -606,23 +605,23 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentForMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person inactiveMember = new Person();
-        inactiveMember.setId(2);
+        inactiveMember.setId(2L);
         inactiveMember.setPermissions(List.of(INACTIVE));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(person), departmentMemberEmbeddable(inactiveMember)));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
 
         assertThat(actual).isEqualTo(Page.empty());
     }
@@ -632,22 +631,22 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentReturnsPageSecond(Role role) {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(role));
 
         final List<DepartmentMemberEmbeddable> activeMembers =
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(USER)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(activeMembers);
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(2);
         assertThat(actual.getPageable().getPageNumber()).isEqualTo(1);
@@ -658,7 +657,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentReturnsEmptyPageWhenDepartmentHeadIsNotResponsible() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final List<DepartmentMemberEmbeddable> activeMembers =
@@ -666,17 +665,17 @@ class DepartmentServiceImplTest {
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(USER)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(activeMembers);
         // person is not department head of THIS department
         departmentEntity.setDepartmentHeads(List.of());
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
         assertThat(actual).isEqualTo(Page.empty());
     }
 
@@ -684,7 +683,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentReturnsEmptyPageWhenSecondStageAuthorityIsNotResponsible() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final List<DepartmentMemberEmbeddable> activeMembers =
@@ -692,17 +691,17 @@ class DepartmentServiceImplTest {
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(USER)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(activeMembers);
         // person is not second stage authority of THIS department
         departmentEntity.setSecondStageAuthorities(List.of());
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
         assertThat(actual).isEqualTo(Page.empty());
     }
 
@@ -710,7 +709,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentReturnsEmptyPageWhenGivenUserIsNotAMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final List<DepartmentMemberEmbeddable> activeMembers =
@@ -718,15 +717,15 @@ class DepartmentServiceImplTest {
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(USER)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(activeMembers);
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
         assertThat(actual).isEqualTo(Page.empty());
     }
 
@@ -735,23 +734,23 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentForRole(Role role) {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(role));
 
         final Person inactiveMember = new Person();
-        inactiveMember.setId(2);
+        inactiveMember.setId(2L);
         inactiveMember.setPermissions(List.of(INACTIVE));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(inactiveMember)));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(1);
         assertThat(actual.getPageable().getPageNumber()).isZero();
@@ -762,23 +761,23 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentForDepartmentHead() {
 
         final Person departmentHead = new Person();
-        departmentHead.setId(1);
+        departmentHead.setId(1L);
         departmentHead.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final Person member = new Person();
-        member.setId(2);
+        member.setId(2L);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(member)));
         departmentEntity.setDepartmentHeads(List.of(departmentHead));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(departmentHead, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(departmentHead, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(1);
         assertThat(actual.getPageable().getPageNumber()).isZero();
@@ -789,23 +788,23 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentForSecondStageAuthority() {
 
         final Person secondStageAuthority = new Person();
-        secondStageAuthority.setId(1);
+        secondStageAuthority.setId(1L);
         secondStageAuthority.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final Person member = new Person();
-        member.setId(2);
+        member.setId(2L);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(member)));
         departmentEntity.setSecondStageAuthorities(List.of(secondStageAuthority));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(secondStageAuthority, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(secondStageAuthority, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(1);
         assertThat(actual.getPageable().getPageNumber()).isZero();
@@ -816,22 +815,22 @@ class DepartmentServiceImplTest {
     void ensureGetManagedMembersOfPersonAndDepartmentForMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person member = new Person();
-        member.setId(2);
+        member.setId(2L);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(departmentMemberEmbeddable(person), departmentMemberEmbeddable(member)));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(0, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
 
         assertThat(actual).isEqualTo(Page.empty());
     }
@@ -840,22 +839,22 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentReturnsPageSecond() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(BOSS));
 
         final List<DepartmentMemberEmbeddable> inactiveMembers =
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(INACTIVE)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(inactiveMembers);
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
 
         assertThat(actual.getTotalPages()).isEqualTo(2);
         assertThat(actual.getPageable().getPageNumber()).isEqualTo(1);
@@ -866,7 +865,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentReturnsEmptyPageWhenDepartmentHeadIsNotResponsible() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(DEPARTMENT_HEAD));
 
         final List<DepartmentMemberEmbeddable> inactiveMembers =
@@ -874,17 +873,17 @@ class DepartmentServiceImplTest {
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(INACTIVE)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(inactiveMembers);
         // person is not department head of THIS department
         departmentEntity.setDepartmentHeads(List.of());
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
         assertThat(actual).isEqualTo(Page.empty());
     }
 
@@ -892,7 +891,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentReturnsEmptyPageWhenSecondStageAuthorityIsNotResponsible() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(SECOND_STAGE_AUTHORITY));
 
         final List<DepartmentMemberEmbeddable> inactiveMembers =
@@ -900,17 +899,17 @@ class DepartmentServiceImplTest {
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(INACTIVE)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(inactiveMembers);
         // person is not second stage authority of THIS department
         departmentEntity.setSecondStageAuthorities(List.of());
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
         assertThat(actual).isEqualTo(Page.empty());
     }
 
@@ -918,7 +917,7 @@ class DepartmentServiceImplTest {
     void ensureGetManagedInactiveMembersOfPersonAndDepartmentReturnsEmptyPageWhenGivenUserIsNotAMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final List<DepartmentMemberEmbeddable> inactiveMembers =
@@ -926,15 +925,15 @@ class DepartmentServiceImplTest {
             anyDepartmentMembers(14, 2, p -> p.setPermissions(List.of(INACTIVE)));
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(inactiveMembers);
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
 
         final PageRequest pageRequest = PageRequest.of(1, 10);
         final PageableSearchQuery pageableSearchQuery = new PageableSearchQuery(pageRequest, "");
 
-        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1, pageableSearchQuery);
+        final Page<Person> actual = sut.getManagedInactiveMembersOfPersonAndDepartment(person, 1L, pageableSearchQuery);
         assertThat(actual).isEqualTo(Page.empty());
     }
 
@@ -944,7 +943,7 @@ class DepartmentServiceImplTest {
         department.setName("department");
 
         final DepartmentEntity savedDepartmentEntity = new DepartmentEntity();
-        savedDepartmentEntity.setId(42);
+        savedDepartmentEntity.setId(42L);
         savedDepartmentEntity.setName("department");
 
         when(departmentRepository.save(any())).thenReturn(savedDepartmentEntity);
@@ -977,17 +976,17 @@ class DepartmentServiceImplTest {
     @Test
     void ensureCallDepartmentRepositoryFindById() {
 
-        sut.getDepartmentById(42);
-        verify(departmentRepository).findById(42);
+        sut.getDepartmentById(42L);
+        verify(departmentRepository).findById(42L);
     }
 
     @Test
     void ensureUpdateDepartmentFailsWhenDepartmentDoesNotExistYet() {
         final Department department = new Department();
-        department.setId(42);
+        department.setId(42L);
         department.setName("department");
 
-        when(departmentRepository.findById(42)).thenReturn(Optional.empty());
+        when(departmentRepository.findById(42L)).thenReturn(Optional.empty());
 
         assertThatIllegalStateException()
             .isThrownBy(() -> sut.update(department));
@@ -997,13 +996,13 @@ class DepartmentServiceImplTest {
     void ensureUpdateCallDepartmentDAOUpdate() {
 
         final Department department = new Department();
-        department.setId(42);
+        department.setId(42L);
         department.setName("department");
 
-        when(departmentRepository.findById(42)).thenReturn(Optional.of(new DepartmentEntity()));
+        when(departmentRepository.findById(42L)).thenReturn(Optional.of(new DepartmentEntity()));
 
         final DepartmentEntity updatedDepartmentEntity = new DepartmentEntity();
-        updatedDepartmentEntity.setId(42);
+        updatedDepartmentEntity.setId(42L);
         updatedDepartmentEntity.setName("department");
         when(departmentRepository.save(any())).thenReturn(updatedDepartmentEntity);
 
@@ -1024,14 +1023,14 @@ class DepartmentServiceImplTest {
     void ensureUpdateDoesNotChangeTheCreatedAtDate() {
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
         department.setName("department");
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
         departmentEntity.setCreatedAt(LocalDate.of(2020, DECEMBER, 4));
         departmentEntity.setLastModification(LocalDate.of(2020, DECEMBER, 4));
 
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(departmentEntity));
         when(departmentRepository.save(any())).thenReturn(new DepartmentEntity());
 
         sut.update(department);
@@ -1050,7 +1049,7 @@ class DepartmentServiceImplTest {
         final Person person = new Person("batman", "Wayne", "Bruce", "wayne@example.org");
 
         final Department department = new Department();
-        department.setId(42);
+        department.setId(42L);
         department.setName("department");
         department.setMembers(List.of(existingPerson, person));
 
@@ -1063,7 +1062,7 @@ class DepartmentServiceImplTest {
         departmentEntity.setLastModification(LocalDate.of(2020, DECEMBER, 4));
         departmentEntity.setMembers(List.of(existingPersonMember));
 
-        when(departmentRepository.findById(42)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(42L)).thenReturn(Optional.of(departmentEntity));
         when(departmentRepository.save(any())).then(returnsFirstArg());
 
         final Department updatedDepartment = sut.update(department);
@@ -1083,7 +1082,7 @@ class DepartmentServiceImplTest {
     void ensureRemovingMembersInDepartmentAlsoSentDepartmentLeftEvent() {
         final Person existingPerson = new Person("pennyworth", "Pennyworth", "Alfred", "pennyworth@example.org");
         final Person personThatWillLeft = new Person("batman", "Wayne", "Bruce", "wayne@example.org");
-        personThatWillLeft.setId(1);
+        personThatWillLeft.setId(1L);
 
         final DepartmentMemberEmbeddable existingPersonMember = new DepartmentMemberEmbeddable();
         existingPersonMember.setPerson(existingPerson);
@@ -1098,11 +1097,11 @@ class DepartmentServiceImplTest {
         departmentEntity.setLastModification(LocalDate.of(2020, DECEMBER, 4));
         departmentEntity.setMembers(List.of(existingPersonMember, willLeftPersonMember));
 
-        when(departmentRepository.findById(42)).thenReturn(Optional.of(departmentEntity));
+        when(departmentRepository.findById(42L)).thenReturn(Optional.of(departmentEntity));
         when(departmentRepository.save(any())).then(returnsFirstArg());
 
         final Department department = new Department();
-        department.setId(42);
+        department.setId(42L);
         department.setName("department");
         department.setMembers(List.of(existingPerson));
 
@@ -1121,16 +1120,16 @@ class DepartmentServiceImplTest {
     void ensureGetAllCallDepartmentDAOFindAll() {
 
         final DepartmentEntity departmentEntityA = new DepartmentEntity();
-        departmentEntityA.setId(1);
+        departmentEntityA.setId(1L);
         departmentEntityA.setName("Department A");
         final DepartmentEntity departmentEntityB = new DepartmentEntity();
-        departmentEntityB.setId(2);
+        departmentEntityB.setId(2L);
         departmentEntityB.setName("Department B");
 
         final Department departmentA = new Department();
-        departmentA.setId(1);
+        departmentA.setId(1L);
         final Department departmentB = new Department();
-        departmentB.setId(2);
+        departmentB.setId(2L);
 
         when(departmentRepository.findAll()).thenReturn(List.of(departmentEntityA, departmentEntityB));
 
@@ -1144,16 +1143,16 @@ class DepartmentServiceImplTest {
     void ensureGetAllDepartmentSorted() {
 
         final DepartmentEntity departmentEntityA = new DepartmentEntity();
-        departmentEntityA.setId(1);
+        departmentEntityA.setId(1L);
         departmentEntityA.setName("Department A");
         final DepartmentEntity departmentEntityB = new DepartmentEntity();
-        departmentEntityB.setId(2);
+        departmentEntityB.setId(2L);
         departmentEntityB.setName("Department B");
 
         final Department departmentA = new Department();
-        departmentA.setId(1);
+        departmentA.setId(1L);
         final Department departmentB = new Department();
-        departmentB.setId(2);
+        departmentB.setId(2L);
 
         when(departmentRepository.findAll()).thenReturn(List.of(departmentEntityB, departmentEntityA));
 
@@ -1165,40 +1164,106 @@ class DepartmentServiceImplTest {
 
     @Test
     void ensureGetManagedDepartmentsOfDepartmentHeadCallCorrectDAOMethod() {
-
         final Person person = new Person();
-
         sut.getManagedDepartmentsOfDepartmentHead(person);
-
         verify(departmentRepository).findByDepartmentHeads(person);
     }
 
     @Test
-    void ensureGetManagedDepartmentsOfSecondStageAuthorityCallCorrectDAOMethod() {
+    void ensureGetManagedDepartmentsOfDepartmentHeadDepartmentSorted() {
+
+        final DepartmentEntity departmentEntityA = new DepartmentEntity();
+        departmentEntityA.setId(1L);
+        departmentEntityA.setName("Department A");
+        final DepartmentEntity departmentEntityB = new DepartmentEntity();
+        departmentEntityB.setId(2L);
+        departmentEntityB.setName("Department B");
+
+        final Department departmentA = new Department();
+        departmentA.setId(1L);
+        final Department departmentB = new Department();
+        departmentB.setId(2L);
 
         final Person person = new Person();
 
-        sut.getManagedDepartmentsOfSecondStageAuthority(person);
+        when(departmentRepository.findByDepartmentHeads(person)).thenReturn(List.of(departmentEntityB, departmentEntityA));
 
+        final List<Department> allDepartments = sut.getManagedDepartmentsOfDepartmentHead(person);
+        assertThat(allDepartments)
+            .hasSize(2)
+            .containsExactly(departmentA, departmentB);
+    }
+
+    @Test
+    void ensureGetManagedDepartmentsOfSecondStageAuthorityCallCorrectDAOMethod() {
+        final Person person = new Person();
+        sut.getManagedDepartmentsOfSecondStageAuthority(person);
         verify(departmentRepository).findBySecondStageAuthorities(person);
     }
 
     @Test
-    void ensureGetAssignedDepartmentsOfMemberCallCorrectDAOMethod() {
+    void ensureGetManagedDepartmentsOfSecondStageAuthorityDepartmentSorted() {
+
+        final DepartmentEntity departmentEntityA = new DepartmentEntity();
+        departmentEntityA.setId(1L);
+        departmentEntityA.setName("Department A");
+        final DepartmentEntity departmentEntityB = new DepartmentEntity();
+        departmentEntityB.setId(2L);
+        departmentEntityB.setName("Department B");
+
+        final Department departmentA = new Department();
+        departmentA.setId(1L);
+        final Department departmentB = new Department();
+        departmentB.setId(2L);
 
         final Person person = new Person();
 
-        sut.getAssignedDepartmentsOfMember(person);
+        when(departmentRepository.findBySecondStageAuthorities(person)).thenReturn(List.of(departmentEntityB, departmentEntityA));
 
+        final List<Department> allDepartments = sut.getManagedDepartmentsOfSecondStageAuthority(person);
+        assertThat(allDepartments)
+            .hasSize(2)
+            .containsExactly(departmentA, departmentB);
+    }
+
+    @Test
+    void ensureGetAssignedDepartmentsOfMemberCallCorrectDAOMethod() {
+        final Person person = new Person();
+        sut.getAssignedDepartmentsOfMember(person);
         verify(departmentRepository).findByMembersPerson(person);
+    }
+
+    @Test
+    void ensureGetAssignedDepartmentsOfMemberDepartmentSorted() {
+
+        final DepartmentEntity departmentEntityA = new DepartmentEntity();
+        departmentEntityA.setId(1L);
+        departmentEntityA.setName("Department A");
+        final DepartmentEntity departmentEntityB = new DepartmentEntity();
+        departmentEntityB.setId(2L);
+        departmentEntityB.setName("Department B");
+
+        final Department departmentA = new Department();
+        departmentA.setId(1L);
+        final Department departmentB = new Department();
+        departmentB.setId(2L);
+
+        final Person person = new Person();
+
+        when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(departmentEntityB, departmentEntityA));
+
+        final List<Department> allDepartments = sut.getAssignedDepartmentsOfMember(person);
+        assertThat(allDepartments)
+            .hasSize(2)
+            .containsExactly(departmentA, departmentB);
     }
 
     @Test
     void ensureDeletionIsNotExecutedIfDepartmentWithGivenIDDoesNotExist() {
 
-        sut.delete(0);
+        sut.delete(0L);
 
-        verify(departmentRepository, never()).deleteById(anyInt());
+        verify(departmentRepository, never()).deleteById(anyLong());
     }
 
     @Test
@@ -1207,12 +1272,12 @@ class DepartmentServiceImplTest {
         final DepartmentEntity departmentEntity = new DepartmentEntity();
         departmentEntity.setName("department");
 
-        when(departmentRepository.existsById(0)).thenReturn(true);
+        when(departmentRepository.existsById(0L)).thenReturn(true);
 
-        sut.delete(0);
+        sut.delete(0L);
 
-        verify(departmentRepository).existsById(0);
-        verify(departmentRepository).deleteById(0);
+        verify(departmentRepository).existsById(0L);
+        verify(departmentRepository).deleteById(0L);
     }
 
     @Test
@@ -1387,6 +1452,8 @@ class DepartmentServiceImplTest {
     @Test
     void ensureReturnsEmptyListOfDepartmentApplicationsIfPersonIsNotAssignedToAnyDepartment() {
 
+        when(departmentRepository.count()).thenReturn(1L);
+
         final Person person = new Person();
         person.setPermissions(List.of(USER));
 
@@ -1394,15 +1461,16 @@ class DepartmentServiceImplTest {
 
         when(departmentRepository.findByMembersPerson(person)).thenReturn(emptyList());
 
-        List<Application> applications = sut.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(person, date, date);
+        final List<Application> applications = sut.getApplicationsFromColleaguesOf(person, date, date);
         assertThat(applications).isEmpty();
 
-        verify(departmentRepository).findByMembersPerson(person);
-        verifyNoInteractions(applicationService);
+        verify(applicationService).getForStatesAndPerson(ApplicationStatus.activeStatuses(), List.of(), date, date);
     }
 
     @Test
     void ensureReturnsEmptyListOfDepartmentApplicationsIfNoMatchingApplicationsForLeave() {
+
+        when(departmentRepository.count()).thenReturn(1L);
 
         final Person person = new Person();
         person.setPermissions(List.of(USER));
@@ -1434,29 +1502,18 @@ class DepartmentServiceImplTest {
         marketing.setMembers(List.of(marketing1Member, marketing2Member, marketing3Member, personMember));
 
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(admins, marketing));
-        when(applicationService.getApplicationsForACertainPeriodAndPerson(any(LocalDate.class), any(LocalDate.class), any(Person.class)))
+        when(applicationService.getForStatesAndPerson(ApplicationStatus.activeStatuses(), List.of(admin1, admin2, marketing1Person, marketing2Person, marketing3Person), date, date))
             .thenReturn(emptyList());
 
-        final List<Application> applications = sut.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(person, date, date);
+        final List<Application> applications = sut.getApplicationsFromColleaguesOf(person, date, date);
         assertThat(applications).isEmpty();
-
-        // Ensure fetches departments of person
-        verify(departmentRepository).findByMembersPerson(person);
-
-        // Ensure fetches applications for leave for every department member
-        verify(applicationService).getApplicationsForACertainPeriodAndPerson(date, date, admin1);
-        verify(applicationService).getApplicationsForACertainPeriodAndPerson(date, date, admin2);
-        verify(applicationService).getApplicationsForACertainPeriodAndPerson(date, date, marketing1Person);
-        verify(applicationService).getApplicationsForACertainPeriodAndPerson(date, date, marketing2Person);
-        verify(applicationService).getApplicationsForACertainPeriodAndPerson(date, date, marketing3Person);
-
-        // Ensure does not fetch applications for leave for the given person
-        verify(applicationService, never()).getApplicationsForACertainPeriodAndPerson(date, date, person);
     }
 
 
     @Test
     void ensureReturnsOnlyWaitingAndAllowedAndCancellationRequestDepartmentApplicationsForLeave() {
+
+        when(departmentRepository.count()).thenReturn(1L);
 
         final Person person = new Person();
         person.setPermissions(List.of(USER));
@@ -1480,7 +1537,7 @@ class DepartmentServiceImplTest {
         marketing.setMembers(List.of(marketing1Member, personMember));
 
         final Application waitingApplication = new Application();
-        waitingApplication.setStatus(TEMPORARY_ALLOWED);
+        waitingApplication.setStatus(WAITING);
         waitingApplication.setStartDate(LocalDate.of(2022, 10, 2));
 
         final Application allowedApplication = new Application();
@@ -1491,42 +1548,33 @@ class DepartmentServiceImplTest {
         cancellationRequestApplication.setStatus(ALLOWED_CANCELLATION_REQUESTED);
         cancellationRequestApplication.setStartDate(LocalDate.of(2022, 9, 12));
 
-        final Application otherApplication = new Application();
-        otherApplication.setStatus(REJECTED);
-        otherApplication.setStartDate(LocalDate.of(2022, 9, 10));
-
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(admins, marketing));
+        when(applicationService.getForStatesAndPerson(ApplicationStatus.activeStatuses(), List.of(admin1, marketing1), date, date))
+            .thenReturn(List.of(waitingApplication, allowedApplication, cancellationRequestApplication));
 
-        when(applicationService.getApplicationsForACertainPeriodAndPerson(any(LocalDate.class), any(LocalDate.class), eq(admin1)))
-            .thenReturn(List.of(waitingApplication, otherApplication));
-
-        when(applicationService.getApplicationsForACertainPeriodAndPerson(any(LocalDate.class), any(LocalDate.class), eq(marketing1)))
-            .thenReturn(List.of(allowedApplication, cancellationRequestApplication));
-
-        final List<Application> applications = sut.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(person, date, date);
-        assertThat(applications)
-            .hasSize(3)
-            .contains(waitingApplication, allowedApplication, cancellationRequestApplication)
-            .doesNotContain(otherApplication);
+        final List<Application> applications = sut.getApplicationsFromColleaguesOf(person, date, date);
+        assertThat(applications).containsExactly(cancellationRequestApplication, waitingApplication, allowedApplication);
     }
 
     @Test
     void ensuresApplicationsFromOthersInDepartmentAreSortedByStartDate() {
+
+        when(departmentRepository.count()).thenReturn(1L);
 
         final Person person = new Person();
         person.setPermissions(List.of(USER));
 
         final LocalDate date = LocalDate.now(UTC);
 
-        final Person marketing1 = new Person("carl", "carl", "carl", "carl@example.org");
-        final DepartmentMemberEmbeddable marketing1Member = departmentMemberEmbeddable(marketing1);
+        final Person marketingPerson = new Person("carl", "carl", "carl", "carl@example.org");
+        final DepartmentMemberEmbeddable memberEmbeddable = departmentMemberEmbeddable(marketingPerson);
 
         final DepartmentEntity marketing = new DepartmentEntity();
         marketing.setName("marketing");
-        marketing.setMembers(List.of(marketing1Member, departmentMemberEmbeddable(person)));
+        marketing.setMembers(List.of(memberEmbeddable, departmentMemberEmbeddable(person)));
 
         final Application waitingApplication = new Application();
-        waitingApplication.setStatus(TEMPORARY_ALLOWED);
+        waitingApplication.setStatus(WAITING);
         waitingApplication.setStartDate(LocalDate.of(2022, 10, 2));
 
         final Application allowedApplication = new Application();
@@ -1538,22 +1586,58 @@ class DepartmentServiceImplTest {
         cancellationRequestApplication.setStartDate(LocalDate.of(2022, 9, 12));
 
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(marketing));
-        when(applicationService.getApplicationsForACertainPeriodAndPerson(any(LocalDate.class), any(LocalDate.class), eq(marketing1)))
+        when(applicationService.getForStatesAndPerson(ApplicationStatus.activeStatuses(), List.of(marketingPerson), date, date))
             .thenReturn(List.of(waitingApplication, allowedApplication, cancellationRequestApplication));
 
-        final List<Application> applications = sut.getApplicationsForLeaveOfMembersInDepartmentsOfPerson(person, date, date);
+        final List<Application> applications = sut.getApplicationsFromColleaguesOf(person, date, date);
         assertThat(applications).containsExactly(cancellationRequestApplication, waitingApplication, allowedApplication);
+    }
+
+    @Test
+    void ensuresApplicationsFromOthersIfNoDepartmentIsAllApplicationsWithoutApplicationFromRequestedPerson() {
+
+        when(departmentRepository.count()).thenReturn(0L);
+
+        final Person person = new Person();
+        person.setId(1L);
+        person.setPermissions(List.of(USER));
+
+        final Person colleague = new Person();
+        colleague.setId(2L);
+
+        final LocalDate date = LocalDate.now(UTC);
+
+        final Application waitingApplication = new Application();
+        waitingApplication.setPerson(colleague);
+        waitingApplication.setStatus(WAITING);
+        waitingApplication.setStartDate(LocalDate.of(2022, 10, 2));
+
+        final Application allowedApplication = new Application();
+        allowedApplication.setPerson(person);
+        allowedApplication.setStatus(ALLOWED);
+        allowedApplication.setStartDate(LocalDate.of(2022, 11, 2));
+
+        final Application cancellationRequestApplication = new Application();
+        cancellationRequestApplication.setPerson(colleague);
+        cancellationRequestApplication.setStatus(ALLOWED_CANCELLATION_REQUESTED);
+        cancellationRequestApplication.setStartDate(LocalDate.of(2022, 9, 12));
+
+        when(applicationService.getForStates(ApplicationStatus.activeStatuses(), date, date))
+            .thenReturn(List.of(waitingApplication, allowedApplication, cancellationRequestApplication));
+
+        final List<Application> applications = sut.getApplicationsFromColleaguesOf(person, date, date);
+        assertThat(applications).containsExactly(cancellationRequestApplication, waitingApplication);
     }
 
     @Test
     void ensureSignedInOfficeUserCanAccessPersonData() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person office = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        office.setId(2);
+        office.setId(2L);
         office.setPermissions(List.of(USER, OFFICE));
 
         boolean isAllowed = sut.isSignedInUserAllowedToAccessPersonData(office, person);
@@ -1564,11 +1648,11 @@ class DepartmentServiceImplTest {
     void ensureSignedInBossUserCanAccessPersonData() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person boss = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        boss.setId(2);
+        boss.setId(2L);
         boss.setPermissions(List.of(USER, BOSS));
 
         boolean isAllowed = sut.isSignedInUserAllowedToAccessPersonData(boss, person);
@@ -1580,10 +1664,10 @@ class DepartmentServiceImplTest {
     void ensureIsPersonAllowedToManageDepartment(Role givenRole) {
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(2);
+        person.setId(2L);
         person.setPermissions(List.of(USER, givenRole));
 
         boolean isAllowed = sut.isPersonAllowedToManageDepartment(person, department);
@@ -1594,11 +1678,11 @@ class DepartmentServiceImplTest {
     void ensureIsPersonAllowedToManageDepartmentWhenDepartmentHead() {
 
         final Person departmentHead = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        departmentHead.setId(2);
+        departmentHead.setId(2L);
         departmentHead.setPermissions(List.of(USER, DEPARTMENT_HEAD));
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
         department.setDepartmentHeads(List.of(departmentHead));
 
         boolean isAllowed = sut.isPersonAllowedToManageDepartment(departmentHead, department);
@@ -1609,11 +1693,11 @@ class DepartmentServiceImplTest {
     void ensureIsPersonAllowedToManageDepartmentWhenSecondStageAuthority() {
 
         final Person secondStageuthority = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        secondStageuthority.setId(2);
+        secondStageuthority.setId(2L);
         secondStageuthority.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY));
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
         department.setSecondStageAuthorities(List.of(secondStageuthority));
 
         boolean isAllowed = sut.isPersonAllowedToManageDepartment(secondStageuthority, department);
@@ -1624,11 +1708,11 @@ class DepartmentServiceImplTest {
     void ensureIsPersonAllowedToManageDepartmentIsFalseForUser() {
 
         final Person user = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        user.setId(2);
+        user.setId(2L);
         user.setPermissions(List.of(USER));
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
 
         boolean isAllowed = sut.isPersonAllowedToManageDepartment(user, department);
         assertThat(isAllowed).isFalse();
@@ -1638,11 +1722,11 @@ class DepartmentServiceImplTest {
     void ensureIsPersonAllowedToManageDepartmentIsFalseForNormalDepartmentMember() {
 
         final Person user = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        user.setId(2);
+        user.setId(2L);
         user.setPermissions(List.of(USER));
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
         department.setMembers(List.of(user));
 
         boolean isAllowed = sut.isPersonAllowedToManageDepartment(user, department);
@@ -1654,11 +1738,11 @@ class DepartmentServiceImplTest {
     void ensureIsPersonAllowedToManageDepartmentIsFalseForRoleDepartmentHeadButNotThisDepartment(Role givenRole) {
 
         final Person user = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        user.setId(2);
+        user.setId(2L);
         user.setPermissions(List.of(USER, givenRole));
 
         final Department department = new Department();
-        department.setId(1);
+        department.setId(1L);
 
         boolean isAllowed = sut.isPersonAllowedToManageDepartment(user, department);
         assertThat(isAllowed).isFalse();
@@ -1668,13 +1752,13 @@ class DepartmentServiceImplTest {
     void ensureSignedInDepartmentHeadOfPersonCanAccessPersonData() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final DepartmentMemberEmbeddable personMember = departmentMemberEmbeddable(person);
 
         final Person departmentHead = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        departmentHead.setId(2);
+        departmentHead.setId(2L);
         departmentHead.setPermissions(List.of(USER, DEPARTMENT_HEAD));
 
         final DepartmentMemberEmbeddable departmentHeadMember = departmentMemberEmbeddable(departmentHead);
@@ -1694,11 +1778,11 @@ class DepartmentServiceImplTest {
     void ensureSignedInDepartmentHeadThatIsNotDepartmentHeadOfPersonCanNotAccessPersonData() {
 
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person departmentHead = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        departmentHead.setId(2);
+        departmentHead.setId(2L);
         departmentHead.setPermissions(List.of(USER, DEPARTMENT_HEAD));
 
         final DepartmentMemberEmbeddable departmentHeadMember = departmentMemberEmbeddable(departmentHead);
@@ -1718,13 +1802,13 @@ class DepartmentServiceImplTest {
     void ensureSignedInDepartmentHeadCanNotAccessSecondStageAuthorityPersonData() {
 
         final Person secondStageAuthority = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        secondStageAuthority.setId(1);
+        secondStageAuthority.setId(1L);
         secondStageAuthority.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY));
 
         final DepartmentMemberEmbeddable secondStageAuthorityMember = departmentMemberEmbeddable(secondStageAuthority);
 
         final Person departmentHead = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        departmentHead.setId(2);
+        departmentHead.setId(2L);
         departmentHead.setPermissions(List.of(USER, DEPARTMENT_HEAD));
 
         final DepartmentMemberEmbeddable departmentHeadMember = departmentMemberEmbeddable(departmentHead);
@@ -1744,13 +1828,13 @@ class DepartmentServiceImplTest {
     void ensureSignedInSecondStageAuthorityCanAccessDepartmentHeadPersonData() {
 
         final Person secondStageAuthority = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        secondStageAuthority.setId(1);
+        secondStageAuthority.setId(1L);
         secondStageAuthority.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY, DEPARTMENT_HEAD));
 
         final DepartmentMemberEmbeddable secondStageAuthorityMember = departmentMemberEmbeddable(secondStageAuthority);
 
         final Person departmentHead = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        departmentHead.setId(2);
+        departmentHead.setId(2L);
         departmentHead.setPermissions(List.of(USER, DEPARTMENT_HEAD, SECOND_STAGE_AUTHORITY));
 
         final DepartmentMemberEmbeddable departmentHeadMember = departmentMemberEmbeddable(departmentHead);
@@ -1772,11 +1856,11 @@ class DepartmentServiceImplTest {
     void ensureNotPrivilegedUserCanNotAccessPersonData() {
 
         Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         Person user = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        user.setId(2);
+        user.setId(2L);
         user.setPermissions(List.of(USER));
 
         boolean isAllowed = sut.isSignedInUserAllowedToAccessPersonData(user, person);
@@ -1787,7 +1871,7 @@ class DepartmentServiceImplTest {
     void ensureNotPrivilegedUserCanAccessOwnPersonData() {
 
         Person user = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        user.setId(1);
+        user.setId(1L);
         user.setPermissions(List.of(USER));
 
         boolean isAllowed = sut.isSignedInUserAllowedToAccessPersonData(user, user);
@@ -1833,18 +1917,18 @@ class DepartmentServiceImplTest {
 
         final DepartmentEntity departmentEntityWithSecondStageRole = new DepartmentEntity();
         departmentEntityWithSecondStageRole.setName("Department A");
-        departmentEntityWithSecondStageRole.setId(1);
+        departmentEntityWithSecondStageRole.setId(1L);
         final DepartmentEntity departmentEntityWithMemberRole = new DepartmentEntity();
         departmentEntityWithMemberRole.setName("Department B");
-        departmentEntityWithMemberRole.setId(2);
+        departmentEntityWithMemberRole.setId(2L);
 
         when(departmentRepository.findBySecondStageAuthorities(secondStageAuthority)).thenReturn(List.of(departmentEntityWithSecondStageRole));
         when(departmentRepository.findByMembersPerson(secondStageAuthority)).thenReturn(List.of(departmentEntityWithMemberRole));
 
         final Department expectedDepartmentWithSecondStageRole = new Department();
-        expectedDepartmentWithSecondStageRole.setId(1);
+        expectedDepartmentWithSecondStageRole.setId(1L);
         final Department expectedDepartment = new Department();
-        expectedDepartment.setId(2);
+        expectedDepartment.setId(2L);
 
         var departmentsWithAccess = sut.getDepartmentsPersonHasAccessTo(secondStageAuthority);
         assertThat(departmentsWithAccess).containsExactly(expectedDepartmentWithSecondStageRole, expectedDepartment);
@@ -1857,18 +1941,18 @@ class DepartmentServiceImplTest {
 
         final DepartmentEntity departmentEntityWithDepartmentHeadRole = new DepartmentEntity();
         departmentEntityWithDepartmentHeadRole.setName("Department A");
-        departmentEntityWithDepartmentHeadRole.setId(1);
+        departmentEntityWithDepartmentHeadRole.setId(1L);
         final DepartmentEntity departmentEntityWithMemberRole = new DepartmentEntity();
         departmentEntityWithMemberRole.setName("Department B");
-        departmentEntityWithMemberRole.setId(2);
+        departmentEntityWithMemberRole.setId(2L);
 
         when(departmentRepository.findByDepartmentHeads(departmentHead)).thenReturn(List.of(departmentEntityWithDepartmentHeadRole));
         when(departmentRepository.findByMembersPerson(departmentHead)).thenReturn(List.of(departmentEntityWithMemberRole));
 
         final Department expectedDepartmentWithDepartmentHeadRole = new Department();
-        expectedDepartmentWithDepartmentHeadRole.setId(1);
+        expectedDepartmentWithDepartmentHeadRole.setId(1L);
         final Department expectedDepartment = new Department();
-        expectedDepartment.setId(2);
+        expectedDepartment.setId(2L);
 
         var departmentsWithAccess = sut.getDepartmentsPersonHasAccessTo(departmentHead);
         assertThat(departmentsWithAccess).containsExactly(expectedDepartmentWithDepartmentHeadRole, expectedDepartment);
@@ -1881,24 +1965,24 @@ class DepartmentServiceImplTest {
 
         final DepartmentEntity departmentEntityWithSecondStageRole = new DepartmentEntity();
         departmentEntityWithSecondStageRole.setName("Department A");
-        departmentEntityWithSecondStageRole.setId(3);
+        departmentEntityWithSecondStageRole.setId(3L);
         final DepartmentEntity departmentEntityWithDepartmentHeadRole = new DepartmentEntity();
         departmentEntityWithDepartmentHeadRole.setName("Department B");
-        departmentEntityWithDepartmentHeadRole.setId(1);
+        departmentEntityWithDepartmentHeadRole.setId(1L);
         final DepartmentEntity departmentEntityWithMemberRole = new DepartmentEntity();
         departmentEntityWithMemberRole.setName("Department C");
-        departmentEntityWithMemberRole.setId(2);
+        departmentEntityWithMemberRole.setId(2L);
 
         when(departmentRepository.findBySecondStageAuthorities(person)).thenReturn(List.of(departmentEntityWithSecondStageRole));
         when(departmentRepository.findByDepartmentHeads(person)).thenReturn(List.of(departmentEntityWithDepartmentHeadRole));
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(departmentEntityWithMemberRole));
 
         final Department expectedDepartmentWithSecondStageRole = new Department();
-        expectedDepartmentWithSecondStageRole.setId(3);
+        expectedDepartmentWithSecondStageRole.setId(3L);
         final Department expectedDepartmentWithDepartmentHeadRole = new Department();
-        expectedDepartmentWithDepartmentHeadRole.setId(1);
+        expectedDepartmentWithDepartmentHeadRole.setId(1L);
         final Department expectedDepartment = new Department();
-        expectedDepartment.setId(2);
+        expectedDepartment.setId(2L);
 
         var departmentsWithAccess = sut.getDepartmentsPersonHasAccessTo(person);
         assertThat(departmentsWithAccess).containsExactly(expectedDepartmentWithSecondStageRole, expectedDepartmentWithDepartmentHeadRole, expectedDepartment);
@@ -1927,24 +2011,24 @@ class DepartmentServiceImplTest {
 
         final DepartmentEntity departmentEntityWithSecondStageRole = new DepartmentEntity();
         departmentEntityWithSecondStageRole.setName("Department A");
-        departmentEntityWithSecondStageRole.setId(1);
+        departmentEntityWithSecondStageRole.setId(1L);
         final DepartmentEntity departmentEntityWithDepartmentHeadRole = new DepartmentEntity();
         departmentEntityWithDepartmentHeadRole.setName("Department C");
-        departmentEntityWithDepartmentHeadRole.setId(3);
+        departmentEntityWithDepartmentHeadRole.setId(3L);
         final DepartmentEntity departmentEntityWithMemberRole = new DepartmentEntity();
         departmentEntityWithMemberRole.setName("department B");
-        departmentEntityWithMemberRole.setId(2);
+        departmentEntityWithMemberRole.setId(2L);
 
         when(departmentRepository.findBySecondStageAuthorities(person)).thenReturn(List.of(departmentEntityWithSecondStageRole));
         when(departmentRepository.findByDepartmentHeads(person)).thenReturn(List.of(departmentEntityWithDepartmentHeadRole));
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(departmentEntityWithMemberRole));
 
         final Department expectedDepartmentWithSecondStageRole = new Department();
-        expectedDepartmentWithSecondStageRole.setId(1);
+        expectedDepartmentWithSecondStageRole.setId(1L);
         final Department expectedDepartmentWithDepartmentHeadRole = new Department();
-        expectedDepartmentWithDepartmentHeadRole.setId(3);
+        expectedDepartmentWithDepartmentHeadRole.setId(3L);
         final Department expectedDepartment = new Department();
-        expectedDepartment.setId(2);
+        expectedDepartment.setId(2L);
 
         var departmentsWithAccess = sut.getDepartmentsPersonHasAccessTo(person);
         assertThat(departmentsWithAccess).containsExactly(expectedDepartmentWithSecondStageRole, expectedDepartment, expectedDepartmentWithDepartmentHeadRole);
@@ -1963,35 +2047,35 @@ class DepartmentServiceImplTest {
     void getDepartmentsByMembers() {
 
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
         final DepartmentMemberEmbeddable existingPersonMember = new DepartmentMemberEmbeddable();
         existingPersonMember.setPerson(person);
 
         final DepartmentEntity departmentEntityA = new DepartmentEntity();
         departmentEntityA.setName("Department A");
-        departmentEntityA.setId(1);
+        departmentEntityA.setId(1L);
         departmentEntityA.setMembers(List.of(existingPersonMember));
 
         final DepartmentEntity departmentEntityB = new DepartmentEntity();
         departmentEntityB.setName("Department B");
-        departmentEntityB.setId(2);
+        departmentEntityB.setId(2L);
         departmentEntityB.setMembers(List.of(existingPersonMember));
 
         when(departmentRepository.findDistinctByMembersPersonIn(List.of(person))).thenReturn(List.of(departmentEntityA, departmentEntityB));
 
         final Map<PersonId, List<String>> departmentsByMembers = sut.getDepartmentNamesByMembers(List.of(person));
-        assertThat(departmentsByMembers).containsEntry(new PersonId(42), List.of("Department A", "Department B"));
+        assertThat(departmentsByMembers).containsEntry(new PersonId(42L), List.of("Department A", "Department B"));
     }
 
     @Test
     void getDepartmentsByMembersForDifferentDepartmentsAndPersons() {
 
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
 
         final Person personTwo = new Person();
-        personTwo.setId(1337);
+        personTwo.setId(1337L);
 
         final DepartmentMemberEmbeddable existingPersonMember = new DepartmentMemberEmbeddable();
         existingPersonMember.setPerson(person);
@@ -2001,12 +2085,12 @@ class DepartmentServiceImplTest {
 
         final DepartmentEntity departmentEntityA = new DepartmentEntity();
         departmentEntityA.setName("Department A");
-        departmentEntityA.setId(1);
+        departmentEntityA.setId(1L);
         departmentEntityA.setMembers(List.of(existingPersonMember));
 
         final DepartmentEntity departmentEntityB = new DepartmentEntity();
         departmentEntityB.setName("Department B");
-        departmentEntityB.setId(2);
+        departmentEntityB.setId(2L);
         departmentEntityB.setMembers(List.of(existingPersonMemberTwo));
 
         when(departmentRepository.findDistinctByMembersPersonIn(List.of(person, personTwo))).thenReturn(List.of(departmentEntityA, departmentEntityB));
@@ -2014,8 +2098,8 @@ class DepartmentServiceImplTest {
         final Map<PersonId, List<String>> departmentsByMembers = sut.getDepartmentNamesByMembers(List.of(person, personTwo));
 
         assertThat(departmentsByMembers)
-            .containsEntry(new PersonId(42), List.of("Department A"))
-            .containsEntry(new PersonId(1337), List.of("Department B"));
+            .containsEntry(new PersonId(42L), List.of("Department A"))
+            .containsEntry(new PersonId(1337L), List.of("Department B"));
     }
 
     @Test
@@ -2032,7 +2116,7 @@ class DepartmentServiceImplTest {
 
         final DepartmentEntity departmentEntityA = new DepartmentEntity();
         departmentEntityA.setName("Department A");
-        departmentEntityA.setId(1);
+        departmentEntityA.setId(1L);
         departmentEntityA.setMembers(List.of(departmentMemberOne, departmentMemberTwo));
 
         when(departmentRepository.findDistinctByMembersPersonIn(List.of(personOne))).thenReturn(List.of(departmentEntityA));
@@ -2041,7 +2125,7 @@ class DepartmentServiceImplTest {
 
         assertThat(departmentsByMembers)
             .hasSize(1)
-            .containsEntry(new PersonId(1), List.of("Department A"));
+            .containsEntry(new PersonId(1L), List.of("Department A"));
     }
 
     @Test
@@ -2061,17 +2145,17 @@ class DepartmentServiceImplTest {
         departmentMemberThree.setPerson(personThree);
 
         final DepartmentEntity departmentEntityA = new DepartmentEntity();
-        departmentEntityA.setId(1);
+        departmentEntityA.setId(1L);
         departmentEntityA.setName("Department A");
         departmentEntityA.setMembers(List.of(departmentMemberOne, departmentMemberTwo));
 
         final DepartmentEntity departmentEntityB = new DepartmentEntity();
-        departmentEntityB.setId(2);
+        departmentEntityB.setId(2L);
         departmentEntityB.setName("Department B");
         departmentEntityB.setMembers(List.of(departmentMemberOne, departmentMemberTwo));
 
         final DepartmentEntity departmentEntityC = new DepartmentEntity();
-        departmentEntityC.setId(3);
+        departmentEntityC.setId(3L);
         departmentEntityC.setName("Department C");
         departmentEntityC.setMembers(List.of(departmentMemberTwo, departmentMemberThree));
 
@@ -2079,20 +2163,20 @@ class DepartmentServiceImplTest {
 
         final Map<PersonId, List<String>> departmentsByMembers = sut.getDepartmentNamesByMembers(List.of(personOne, personTwo, personThree));
         assertThat(departmentsByMembers)
-            .containsEntry(new PersonId(1), List.of("Department A", "Department B"))
-            .containsEntry(new PersonId(2), List.of("Department C", "Department A", "Department B"))
-            .containsEntry(new PersonId(3), List.of("Department C"));
+            .containsEntry(new PersonId(1L), List.of("Department A", "Department B"))
+            .containsEntry(new PersonId(2L), List.of("Department C", "Department A", "Department B"))
+            .containsEntry(new PersonId(3L), List.of("Department C"));
     }
 
     @Test
     void ensureDeletionOfMembershipOnPersonDeletionEvent() {
         final Person person = new Person();
-        person.setId(42);
+        person.setId(42L);
         final Person other = new Person();
-        other.setId(21);
+        other.setId(21L);
 
         final DepartmentEntity department = new DepartmentEntity();
-        department.setId(1);
+        department.setId(1L);
         final DepartmentMemberEmbeddable personEmbeddable = new DepartmentMemberEmbeddable();
         personEmbeddable.setPerson(person);
         final DepartmentMemberEmbeddable otherEmbeddable = new DepartmentMemberEmbeddable();
@@ -2100,7 +2184,7 @@ class DepartmentServiceImplTest {
 
         department.setMembers(List.of(personEmbeddable, otherEmbeddable));
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(department));
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(department));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
         when(departmentRepository.save(department)).thenReturn(department);
 
         sut.deleteAssignedDepartmentsOfMember(new PersonDeletedEvent(person));
@@ -2115,15 +2199,15 @@ class DepartmentServiceImplTest {
     @Test
     void ensureDeletionOfDepartmentHeadAssignmentOnPersonDeletionEvent() {
         final Person departmentHead = new Person();
-        departmentHead.setId(42);
+        departmentHead.setId(42L);
         final Person other = new Person();
-        other.setId(21);
+        other.setId(21L);
 
         final DepartmentEntity department = new DepartmentEntity();
-        department.setId(1);
+        department.setId(1L);
         department.setDepartmentHeads(List.of(departmentHead, other));
         when(departmentRepository.findByDepartmentHeads(departmentHead)).thenReturn(List.of(department));
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(department));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
         when(departmentRepository.save(department)).thenReturn(department);
 
         sut.deleteDepartmentHead(new PersonDeletedEvent(departmentHead));
@@ -2138,15 +2222,15 @@ class DepartmentServiceImplTest {
     @Test
     void ensureDeletionOfSecondStageAuthorityAssignmentOnPersonDeletionEvent() {
         final Person secondStageAuthority = new Person();
-        secondStageAuthority.setId(42);
+        secondStageAuthority.setId(42L);
         final Person other = new Person();
-        other.setId(21);
+        other.setId(21L);
 
         final DepartmentEntity department = new DepartmentEntity();
-        department.setId(1);
+        department.setId(1L);
         department.setSecondStageAuthorities(List.of(secondStageAuthority, other));
         when(departmentRepository.findBySecondStageAuthorities(secondStageAuthority)).thenReturn(List.of(department));
-        when(departmentRepository.findById(1)).thenReturn(Optional.of(department));
+        when(departmentRepository.findById(1L)).thenReturn(Optional.of(department));
         when(departmentRepository.save(department)).thenReturn(department);
 
         sut.deleteSecondStageAuthority(new PersonDeletedEvent(secondStageAuthority));
@@ -2162,11 +2246,11 @@ class DepartmentServiceImplTest {
     void ensureDepartmentMatchFalse() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person otherPerson = new Person();
-        otherPerson.setId(2);
+        otherPerson.setId(2L);
         otherPerson.setPermissions(List.of(USER));
 
         final DepartmentMemberEmbeddable memberEmbeddable = new DepartmentMemberEmbeddable();
@@ -2176,11 +2260,11 @@ class DepartmentServiceImplTest {
         otherMemberEmbeddable.setPerson(otherPerson);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(memberEmbeddable));
 
         final DepartmentEntity otherDepartmentEntity = new DepartmentEntity();
-        otherDepartmentEntity.setId(2);
+        otherDepartmentEntity.setId(2L);
         otherDepartmentEntity.setMembers(List.of(otherMemberEmbeddable));
 
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(departmentEntity));
@@ -2194,11 +2278,11 @@ class DepartmentServiceImplTest {
     void ensureDepartmentMatchWhenBothAreMembers() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person otherPerson = new Person();
-        otherPerson.setId(2);
+        otherPerson.setId(2L);
         otherPerson.setPermissions(List.of(USER));
 
         final DepartmentMemberEmbeddable memberEmbeddable = new DepartmentMemberEmbeddable();
@@ -2208,7 +2292,7 @@ class DepartmentServiceImplTest {
         otherMemberEmbeddable.setPerson(otherPerson);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(memberEmbeddable, otherMemberEmbeddable));
 
         when(departmentRepository.findByMembersPerson(person)).thenReturn(List.of(departmentEntity));
@@ -2222,18 +2306,18 @@ class DepartmentServiceImplTest {
     void ensureDepartmentMatchWhenPersonIsDepartmentHeadOfOtherPersonButNotMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, DEPARTMENT_HEAD));
 
         final Person otherPerson = new Person();
-        otherPerson.setId(2);
+        otherPerson.setId(2L);
         otherPerson.setPermissions(List.of(USER));
 
         final DepartmentMemberEmbeddable otherMemberEmbeddable = new DepartmentMemberEmbeddable();
         otherMemberEmbeddable.setPerson(otherPerson);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(otherMemberEmbeddable));
         departmentEntity.setDepartmentHeads(List.of(person));
 
@@ -2251,18 +2335,18 @@ class DepartmentServiceImplTest {
     void ensureDepartmentMatchWhenPersonIsSecondStageAuthorityOfOtherPersonButNotMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY));
 
         final Person otherPerson = new Person();
-        otherPerson.setId(2);
+        otherPerson.setId(2L);
         otherPerson.setPermissions(List.of(USER));
 
         final DepartmentMemberEmbeddable otherMemberEmbeddable = new DepartmentMemberEmbeddable();
         otherMemberEmbeddable.setPerson(otherPerson);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(otherMemberEmbeddable));
         departmentEntity.setSecondStageAuthorities(List.of(person));
 
@@ -2280,18 +2364,18 @@ class DepartmentServiceImplTest {
     void ensureDepartmentMatchWhenOtherPersonIsDepartmentHeadOfPersonButNotMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person otherPerson = new Person();
-        otherPerson.setId(2);
+        otherPerson.setId(2L);
         otherPerson.setPermissions(List.of(USER, DEPARTMENT_HEAD));
 
         final DepartmentMemberEmbeddable memberEmbeddable = new DepartmentMemberEmbeddable();
         memberEmbeddable.setPerson(person);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(memberEmbeddable));
         departmentEntity.setDepartmentHeads(List.of(otherPerson));
 
@@ -2309,18 +2393,18 @@ class DepartmentServiceImplTest {
     void ensureDepartmentMatchWhenOtherPersonIsSecondStageAuthorityOfPersonButNotMember() {
 
         final Person person = new Person();
-        person.setId(1);
+        person.setId(1L);
         person.setPermissions(List.of(USER));
 
         final Person otherPerson = new Person();
-        otherPerson.setId(2);
+        otherPerson.setId(2L);
         otherPerson.setPermissions(List.of(USER, SECOND_STAGE_AUTHORITY));
 
         final DepartmentMemberEmbeddable memberEmbeddable = new DepartmentMemberEmbeddable();
         memberEmbeddable.setPerson(person);
 
         final DepartmentEntity departmentEntity = new DepartmentEntity();
-        departmentEntity.setId(1);
+        departmentEntity.setId(1L);
         departmentEntity.setMembers(List.of(memberEmbeddable));
         departmentEntity.setSecondStageAuthorities(List.of(otherPerson));
 
@@ -2344,7 +2428,7 @@ class DepartmentServiceImplTest {
 
     private static Person anyPerson(int id) {
         final Person person = new Person();
-        person.setId(id);
+        person.setId((long) id);
         return person;
     }
 

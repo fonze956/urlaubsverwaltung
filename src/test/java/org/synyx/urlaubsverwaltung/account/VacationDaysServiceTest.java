@@ -7,6 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.support.StaticMessageSource;
 import org.synyx.urlaubsverwaltung.absence.DateRange;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
@@ -16,6 +17,7 @@ import org.synyx.urlaubsverwaltung.period.DayLength;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.workingtime.WorkDaysCountService;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar;
+import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -44,13 +46,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.synyx.urlaubsverwaltung.TestDataCreator.createVacationTypeEntity;
+import static org.synyx.urlaubsverwaltung.TestDataCreator.createVacationType;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
 import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.activeStatuses;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.HOLIDAY;
 import static org.synyx.urlaubsverwaltung.period.DayLength.FULL;
+import static org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation.WorkingTimeCalendarEntryType.NO_WORKDAY;
+import static org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar.WorkingDayInformation.WorkingTimeCalendarEntryType.WORKDAY;
 
 @ExtendWith(MockitoExtension.class)
 class VacationDaysServiceTest {
@@ -117,8 +122,7 @@ class VacationDaysServiceTest {
         a5.setStatus(WAITING);
         when(workDaysCountService.getWorkDaysCount(a5.getDayLength(), a5.getStartDate(), lastMilestone, a5.getPerson())).thenReturn(BigDecimal.valueOf(2L));
 
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(any(LocalDate.class), any(LocalDate.class), any(Person.class), eq(statuses), eq(HOLIDAY)))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(any(LocalDate.class), any(LocalDate.class), any(Person.class), eq(activeStatuses()), eq(HOLIDAY)))
             .thenReturn(List.of(a1, a2, a3, a4, a5, a11));
 
         // must be: 2 + 1 + 5 + 4 + 1 + 2 = 15
@@ -155,8 +159,7 @@ class VacationDaysServiceTest {
         a4.setStatus(WAITING);
         when(workDaysCountService.getWorkDaysCount(a4.getDayLength(), firstMilestone, a4.getEndDate(), a4.getPerson())).thenReturn(BigDecimal.valueOf(4L));
 
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(any(LocalDate.class), any(LocalDate.class), eq(person), eq(statuses), eq(HOLIDAY)))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(any(LocalDate.class), any(LocalDate.class), eq(person), eq(activeStatuses()), eq(HOLIDAY)))
             .thenReturn(List.of(a1, a2, a4));
 
         // must be: 2.5 + 5 + 4 = 11.5
@@ -174,8 +177,7 @@ class VacationDaysServiceTest {
         application4Days.setEndDate(LocalDate.of(2022, JANUARY, 7));
         application4Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4Days.getDayLength(), application4Days.getStartDate(), application4Days.getEndDate(), application4Days.getPerson())).thenReturn(BigDecimal.valueOf(4L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4Days));
 
         final Application application20Days = anyApplication(person);
@@ -183,7 +185,7 @@ class VacationDaysServiceTest {
         application20Days.setEndDate(LocalDate.of(2022, MAY, 3));
         application20Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application20Days.getDayLength(), application20Days.getStartDate(), application20Days.getEndDate(), application20Days.getPerson())).thenReturn(BigDecimal.valueOf(20L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application20Days));
 
         final Account account = anyAccount(person, Year.of(2022));
@@ -209,7 +211,6 @@ class VacationDaysServiceTest {
         application4Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4Days.getDayLength(), application4Days.getStartDate(), application4Days.getEndDate(), application4Days.getPerson()))
             .thenReturn(BigDecimal.valueOf(4L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
 
         final Application application20Days = anyApplication(person);
         application20Days.setStartDate(LocalDate.of(2022, APRIL, 2));
@@ -220,7 +221,7 @@ class VacationDaysServiceTest {
 
         final LocalDate from = LocalDate.of(2022, 1, 1);
         final LocalDate to = LocalDate.of(2022, 12, 31);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(from, to, person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(from, to, person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4Days, application20Days));
 
         final Account account = anyAccount(person, Year.of(2022));
@@ -245,8 +246,7 @@ class VacationDaysServiceTest {
         application4Days.setEndDate(LocalDate.of(2022, JANUARY, 7));
         application4Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4Days.getDayLength(), application4Days.getStartDate(), application4Days.getEndDate(), application4Days.getPerson())).thenReturn(BigDecimal.valueOf(4L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4Days));
 
         final Application application20Days = anyApplication(person);
@@ -254,7 +254,7 @@ class VacationDaysServiceTest {
         application20Days.setEndDate(LocalDate.of(2022, MAY, 3));
         application20Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application20Days.getDayLength(), application20Days.getStartDate(), application20Days.getEndDate(), application20Days.getPerson())).thenReturn(BigDecimal.valueOf(20L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application20Days));
 
         final Application application4DaysIn2023 = anyApplication(person);
@@ -262,7 +262,7 @@ class VacationDaysServiceTest {
         application4DaysIn2023.setEndDate(LocalDate.of(2023, JANUARY, 7));
         application4DaysIn2023.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4DaysIn2023.getDayLength(), application4DaysIn2023.getStartDate(), application4DaysIn2023.getEndDate(), application4DaysIn2023.getPerson())).thenReturn(BigDecimal.valueOf(4L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4DaysIn2023));
 
         final Application application20DaysIn2023 = anyApplication(person);
@@ -270,7 +270,7 @@ class VacationDaysServiceTest {
         application20DaysIn2023.setEndDate(LocalDate.of(2023, MAY, 3));
         application20DaysIn2023.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application20DaysIn2023.getDayLength(), application20DaysIn2023.getStartDate(), application20DaysIn2023.getEndDate(), application20DaysIn2023.getPerson())).thenReturn(BigDecimal.valueOf(20L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2023, 4, 1), LocalDate.of(2023, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2023, 4, 1), LocalDate.of(2023, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application20DaysIn2023));
 
         // 36 Total, using 24, so 12 left
@@ -314,8 +314,7 @@ class VacationDaysServiceTest {
         application20DaysBeforeExpiryDate.setEndDate(LocalDate.of(2022, JANUARY, 28));
         application20DaysBeforeExpiryDate.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application20DaysBeforeExpiryDate.getDayLength(), application20DaysBeforeExpiryDate.getStartDate(), application20DaysBeforeExpiryDate.getEndDate(), application20DaysBeforeExpiryDate.getPerson())).thenReturn(BigDecimal.valueOf(20L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application20DaysBeforeExpiryDate));
 
         final Application application20DaysAfterApril = anyApplication(person);
@@ -323,7 +322,7 @@ class VacationDaysServiceTest {
         application20DaysAfterApril.setEndDate(LocalDate.of(2022, MAY, 3));
         application20DaysAfterApril.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application20DaysAfterApril.getDayLength(), application20DaysAfterApril.getStartDate(), application20DaysAfterApril.getEndDate(), application20DaysAfterApril.getPerson())).thenReturn(BigDecimal.valueOf(20L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application20DaysAfterApril));
 
         final Account account = anyAccount(person, Year.of(2022));
@@ -345,8 +344,7 @@ class VacationDaysServiceTest {
         application4Days.setEndDate(LocalDate.of(2022, JANUARY, 6));
         application4Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4Days.getDayLength(), application4Days.getStartDate(), application4Days.getEndDate(), application4Days.getPerson())).thenReturn(BigDecimal.valueOf(4L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4Days));
 
         final Application application1Day = anyApplication(person);
@@ -354,7 +352,7 @@ class VacationDaysServiceTest {
         application1Day.setEndDate(LocalDate.of(2022, MAY, 2));
         application1Day.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application1Day.getDayLength(), application1Day.getStartDate(), application1Day.getEndDate(), application1Day.getPerson())).thenReturn(BigDecimal.valueOf(1L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application1Day));
 
         final Account account = anyAccount(person, Year.of(2022));
@@ -378,8 +376,7 @@ class VacationDaysServiceTest {
         application4Days.setEndDate(LocalDate.of(2022, JANUARY, 6));
         application4Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4Days.getDayLength(), application4Days.getStartDate(), application4Days.getEndDate(), application4Days.getPerson())).thenReturn(BigDecimal.valueOf(4L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4Days));
 
         final Application application1Day = anyApplication(person);
@@ -387,7 +384,7 @@ class VacationDaysServiceTest {
         application1Day.setEndDate(LocalDate.of(2022, MAY, 2));
         application1Day.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application1Day.getDayLength(), application1Day.getStartDate(), application1Day.getEndDate(), application1Day.getPerson())).thenReturn(BigDecimal.valueOf(1L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application1Day));
 
         final Account account = anyAccount(person, Year.of(2022));
@@ -411,8 +408,7 @@ class VacationDaysServiceTest {
         application4Days.setEndDate(LocalDate.of(2022, JANUARY, 6));
         application4Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application4Days.getDayLength(), application4Days.getStartDate(), application4Days.getEndDate(), application4Days.getPerson())).thenReturn(BigDecimal.valueOf(4L));
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 1, 1), LocalDate.of(2022, 3, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application4Days));
 
         final Application application3Days = anyApplication(person);
@@ -420,7 +416,7 @@ class VacationDaysServiceTest {
         application3Days.setEndDate(LocalDate.of(2022, MAY, 5));
         application3Days.setStatus(ALLOWED);
         when(workDaysCountService.getWorkDaysCount(application3Days.getDayLength(), application3Days.getStartDate(), application3Days.getEndDate(), application3Days.getPerson())).thenReturn(BigDecimal.valueOf(3L));
-        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, statuses, HOLIDAY))
+        when(applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(LocalDate.of(2022, 4, 1), LocalDate.of(2022, 12, 31), person, activeStatuses(), HOLIDAY))
             .thenReturn(List.of(application3Days));
 
         final Account account = anyAccount(person, Year.of(2022));
@@ -451,13 +447,13 @@ class VacationDaysServiceTest {
         final Application application = anyApplication(person);
         application.setStartDate(LocalDate.of(year, JANUARY, 3));
         application.setEndDate(LocalDate.of(year, JANUARY, 28));
-        application.setVacationType(createVacationTypeEntity(category));
+        application.setVacationType(createVacationType(1L, category, new StaticMessageSource()));
 
-        final List<ApplicationStatus> applicationStatus = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
+        final List<ApplicationStatus> applicationStatus = activeStatuses();
         when(applicationService.getForStatesAndPerson(applicationStatus, List.of(person), firstDayOfYear, lastDayOfYear))
             .thenReturn(List.of(application));
 
-        final Map<LocalDate, DayLength> workingTimeByDate = buildWorkingTimeByDate(firstDayOfYear, lastDayOfYear, date -> DayLength.FULL);
+        final Map<LocalDate, WorkingDayInformation> workingTimeByDate = buildWorkingTimeByDate(firstDayOfYear, lastDayOfYear, date -> new WorkingDayInformation(FULL, WORKDAY, WORKDAY));
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimeByDate);
 
         final Map<Account, HolidayAccountVacationDays> actual =
@@ -474,9 +470,9 @@ class VacationDaysServiceTest {
 
         assertThat(actual).hasSize(1);
         assertThat(actual.get(account)).satisfies(holidayAccountVacationDays -> {
-            assertThat(holidayAccountVacationDays.getAccount()).isEqualTo(account);
-            assertThat(holidayAccountVacationDays.getVacationDaysYear()).isEqualTo(expectedDaysLeft);
-            assertThat(holidayAccountVacationDays.getVacationDaysDateRange()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.account()).isEqualTo(account);
+            assertThat(holidayAccountVacationDays.vacationDaysYear()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.vacationDaysDateRange()).isEqualTo(expectedDaysLeft);
         });
     }
 
@@ -497,11 +493,11 @@ class VacationDaysServiceTest {
         application.setStartDate(LocalDate.of(year, MARCH, 7));
         application.setEndDate(LocalDate.of(year, MARCH, 18));
 
-        final List<ApplicationStatus> applicationStatus = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
+        final List<ApplicationStatus> applicationStatus = activeStatuses();
         when(applicationService.getForStatesAndPerson(applicationStatus, List.of(person), firstDayOfYear, lastDayOfYear))
             .thenReturn(List.of(application));
 
-        final Map<LocalDate, DayLength> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
+        final Map<LocalDate, WorkingDayInformation> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimeByDate);
 
         final Map<Account, HolidayAccountVacationDays> actual =
@@ -518,9 +514,9 @@ class VacationDaysServiceTest {
 
         assertThat(actual).hasSize(1);
         assertThat(actual.get(account)).satisfies(holidayAccountVacationDays -> {
-            assertThat(holidayAccountVacationDays.getAccount()).isEqualTo(account);
-            assertThat(holidayAccountVacationDays.getVacationDaysYear()).isEqualTo(expectedDaysLeft);
-            assertThat(holidayAccountVacationDays.getVacationDaysDateRange()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.account()).isEqualTo(account);
+            assertThat(holidayAccountVacationDays.vacationDaysYear()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.vacationDaysDateRange()).isEqualTo(expectedDaysLeft);
         });
     }
 
@@ -541,11 +537,11 @@ class VacationDaysServiceTest {
         application.setStartDate(LocalDate.of(year, JUNE, 6));
         application.setEndDate(LocalDate.of(year, JUNE, 17));
 
-        final List<ApplicationStatus> applicationStatus = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
+        final List<ApplicationStatus> applicationStatus = activeStatuses();
         when(applicationService.getForStatesAndPerson(applicationStatus, List.of(person), firstDayOfYear, lastDayOfYear))
             .thenReturn(List.of(application));
 
-        final Map<LocalDate, DayLength> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
+        final Map<LocalDate, WorkingDayInformation> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimeByDate);
 
         final Map<Account, HolidayAccountVacationDays> actual =
@@ -562,9 +558,9 @@ class VacationDaysServiceTest {
 
         assertThat(actual).hasSize(1);
         assertThat(actual.get(account)).satisfies(holidayAccountVacationDays -> {
-            assertThat(holidayAccountVacationDays.getAccount()).isEqualTo(account);
-            assertThat(holidayAccountVacationDays.getVacationDaysYear()).isEqualTo(expectedDaysLeft);
-            assertThat(holidayAccountVacationDays.getVacationDaysDateRange()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.account()).isEqualTo(account);
+            assertThat(holidayAccountVacationDays.vacationDaysYear()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.vacationDaysDateRange()).isEqualTo(expectedDaysLeft);
         });
     }
 
@@ -585,11 +581,11 @@ class VacationDaysServiceTest {
         application.setStartDate(LocalDate.of(year, MARCH, 28));
         application.setEndDate(LocalDate.of(year, APRIL, 8));
 
-        final List<ApplicationStatus> applicationStatus = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
+        final List<ApplicationStatus> applicationStatus = activeStatuses();
         when(applicationService.getForStatesAndPerson(applicationStatus, List.of(person), firstDayOfYear, lastDayOfYear))
             .thenReturn(List.of(application));
 
-        final Map<LocalDate, DayLength> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
+        final Map<LocalDate, WorkingDayInformation> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimeByDate);
 
         final Map<Account, HolidayAccountVacationDays> actual =
@@ -606,9 +602,9 @@ class VacationDaysServiceTest {
 
         assertThat(actual).hasSize(1);
         assertThat(actual.get(account)).satisfies(holidayAccountVacationDays -> {
-            assertThat(holidayAccountVacationDays.getAccount()).isEqualTo(account);
-            assertThat(holidayAccountVacationDays.getVacationDaysYear()).isEqualTo(expectedDaysLeft);
-            assertThat(holidayAccountVacationDays.getVacationDaysDateRange()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.account()).isEqualTo(account);
+            assertThat(holidayAccountVacationDays.vacationDaysYear()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.vacationDaysDateRange()).isEqualTo(expectedDaysLeft);
         });
     }
 
@@ -629,11 +625,11 @@ class VacationDaysServiceTest {
         application.setStartDate(LocalDate.of(year - 1, DECEMBER, 27));
         application.setEndDate(LocalDate.of(year, JANUARY, 7));
 
-        final List<ApplicationStatus> applicationStatus = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
+        final List<ApplicationStatus> applicationStatus = activeStatuses();
         when(applicationService.getForStatesAndPerson(applicationStatus, List.of(person), firstDayOfYear, lastDayOfYear))
             .thenReturn(List.of(application));
 
-        final Map<LocalDate, DayLength> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
+        final Map<LocalDate, WorkingDayInformation> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimeByDate);
 
         final Map<Account, HolidayAccountVacationDays> actual =
@@ -650,9 +646,9 @@ class VacationDaysServiceTest {
 
         assertThat(actual).hasSize(1);
         assertThat(actual.get(account)).satisfies(holidayAccountVacationDays -> {
-            assertThat(holidayAccountVacationDays.getAccount()).isEqualTo(account);
-            assertThat(holidayAccountVacationDays.getVacationDaysYear()).isEqualTo(expectedDaysLeft);
-            assertThat(holidayAccountVacationDays.getVacationDaysDateRange()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.account()).isEqualTo(account);
+            assertThat(holidayAccountVacationDays.vacationDaysYear()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.vacationDaysDateRange()).isEqualTo(expectedDaysLeft);
         });
     }
 
@@ -673,11 +669,11 @@ class VacationDaysServiceTest {
         application.setStartDate(LocalDate.of(year, DECEMBER, 26));
         application.setEndDate(LocalDate.of(year + 1, JANUARY, 7));
 
-        final List<ApplicationStatus> applicationStatus = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
+        final List<ApplicationStatus> applicationStatus = activeStatuses();
         when(applicationService.getForStatesAndPerson(applicationStatus, List.of(person), firstDayOfYear, lastDayOfYear))
             .thenReturn(List.of(application));
 
-        final Map<LocalDate, DayLength> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
+        final Map<LocalDate, WorkingDayInformation> workingTimeByDate = workingTimeMondayToFriday(firstDayOfYear, lastDayOfYear);
         final WorkingTimeCalendar workingTimeCalendar = new WorkingTimeCalendar(workingTimeByDate);
 
         final Map<Account, HolidayAccountVacationDays> actual =
@@ -694,9 +690,9 @@ class VacationDaysServiceTest {
 
         assertThat(actual).hasSize(1);
         assertThat(actual.get(account)).satisfies(holidayAccountVacationDays -> {
-            assertThat(holidayAccountVacationDays.getAccount()).isEqualTo(account);
-            assertThat(holidayAccountVacationDays.getVacationDaysYear()).isEqualTo(expectedDaysLeft);
-            assertThat(holidayAccountVacationDays.getVacationDaysDateRange()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.account()).isEqualTo(account);
+            assertThat(holidayAccountVacationDays.vacationDaysYear()).isEqualTo(expectedDaysLeft);
+            assertThat(holidayAccountVacationDays.vacationDaysDateRange()).isEqualTo(expectedDaysLeft);
         });
     }
 
@@ -714,12 +710,16 @@ class VacationDaysServiceTest {
         assertThat(sut.getUsedRemainingVacationDays(account)).isEqualTo(ZERO);
     }
 
-    private Map<LocalDate, DayLength> workingTimeMondayToFriday(LocalDate from, LocalDate to) {
-        return buildWorkingTimeByDate(from, to, date -> weekend(date) ? DayLength.ZERO : DayLength.FULL);
+    private Map<LocalDate, WorkingDayInformation> workingTimeMondayToFriday(LocalDate from, LocalDate to) {
+        return buildWorkingTimeByDate(from, to, date ->
+            weekend(date)
+                ? new WorkingDayInformation(DayLength.ZERO, NO_WORKDAY, NO_WORKDAY)
+                : new WorkingDayInformation(FULL, WORKDAY, WORKDAY)
+        );
     }
 
-    private Map<LocalDate, DayLength> buildWorkingTimeByDate(LocalDate from, LocalDate to, Function<LocalDate, DayLength> dayLengthProvider) {
-        Map<LocalDate, DayLength> map = new HashMap<>();
+    private Map<LocalDate, WorkingDayInformation> buildWorkingTimeByDate(LocalDate from, LocalDate to, Function<LocalDate, WorkingDayInformation> dayLengthProvider) {
+        Map<LocalDate, WorkingDayInformation> map = new HashMap<>();
         for (LocalDate date : new DateRange(from, to)) {
             map.put(date, dayLengthProvider.apply(date));
         }
@@ -732,7 +732,7 @@ class VacationDaysServiceTest {
 
     private Person anyPerson() {
         final Person person = new Person("muster", "Muster", "Marlene", "muster@example.org");
-        person.setId(1);
+        person.setId(1L);
         return person;
     }
 
@@ -740,7 +740,7 @@ class VacationDaysServiceTest {
         final Account account = new Account();
         account.setPerson(person);
         account.setValidFrom(LocalDate.of(year.getValue(), JANUARY, 1));
-        account.setExpiryDate(LocalDate.of(year.getValue(), APRIL, 1));
+        account.setExpiryDateLocally(LocalDate.of(year.getValue(), APRIL, 1));
         account.setAnnualVacationDays(BigDecimal.valueOf(30));
         account.setActualVacationDays(BigDecimal.valueOf(30));
         account.setRemainingVacationDays(ZERO);
@@ -751,9 +751,9 @@ class VacationDaysServiceTest {
 
     private static Application anyApplication(Person person) {
         final Application application = new Application();
-        application.setId(1);
+        application.setId(1L);
         application.setPerson(person);
-        application.setVacationType(createVacationTypeEntity(HOLIDAY));
+        application.setVacationType(createVacationType(1L, HOLIDAY, new StaticMessageSource()));
         application.setDayLength(FULL);
         return application;
     }

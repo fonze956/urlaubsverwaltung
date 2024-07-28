@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service;
 import org.synyx.urlaubsverwaltung.absence.DateRange;
 import org.synyx.urlaubsverwaltung.application.application.Application;
 import org.synyx.urlaubsverwaltung.application.application.ApplicationService;
-import org.synyx.urlaubsverwaltung.application.application.ApplicationStatus;
 import org.synyx.urlaubsverwaltung.person.Person;
 import org.synyx.urlaubsverwaltung.workingtime.WorkDaysCountService;
 import org.synyx.urlaubsverwaltung.workingtime.WorkingTimeCalendar;
@@ -29,10 +28,7 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.reducing;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toMap;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.ALLOWED_CANCELLATION_REQUESTED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.TEMPORARY_ALLOWED;
-import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.WAITING;
+import static org.synyx.urlaubsverwaltung.application.application.ApplicationStatus.activeStatuses;
 import static org.synyx.urlaubsverwaltung.application.vacationtype.VacationCategory.HOLIDAY;
 
 
@@ -83,7 +79,6 @@ public class VacationDaysService {
      * @param account  the account for the year to calculate the vacation days for
      * @param nextYear the account for following year, if available
      * @return information about the vacation days left for that year
-     *
      * @deprecated in favor of {@link VacationDaysService#getVacationDaysLeft(List, Map, DateRange)} (less database calls)
      */
     @Deprecated(since = "4.53.0")
@@ -98,15 +93,14 @@ public class VacationDaysService {
      * @param workingTimeCalendarsByPerson {@link WorkingTimeCalendar} to calculate the used vacation days for the {@link Account}s persons.
      * @param dateRange                    date range to calculate left vacation days for. must be within a year.
      * @return {@link HolidayAccountVacationDays} for every passed {@link Account}. {@link Account}s with no used vacation are included.
-     *
      * @throws IllegalArgumentException when dateRange is over one year.
      */
     public Map<Account, HolidayAccountVacationDays> getVacationDaysLeft(List<Account> holidayAccounts,
                                                                         Map<Person, WorkingTimeCalendar> workingTimeCalendarsByPerson,
                                                                         DateRange dateRange) {
 
-        final LocalDate from = dateRange.getStartDate();
-        final LocalDate to = dateRange.getEndDate();
+        final LocalDate from = dateRange.startDate();
+        final LocalDate to = dateRange.endDate();
 
         if (to.getYear() != from.getYear()) {
             throw new IllegalArgumentException(String.format("date range must be in the same year but was from=%s to=%s", from, to));
@@ -146,7 +140,7 @@ public class VacationDaysService {
 
                 return new HolidayAccountVacationDays(account, vacationDaysLeftYear, vacationDaysLeftDateRange);
             })
-            .collect(toMap(HolidayAccountVacationDays::getAccount, identity()));
+            .collect(toMap(HolidayAccountVacationDays::account, identity()));
     }
 
     BigDecimal getUsedVacationDaysBetweenTwoMilestones(Person person, LocalDate firstMilestone, LocalDate lastMilestone) {
@@ -155,20 +149,18 @@ public class VacationDaysService {
             return ZERO;
         }
 
-        final List<ApplicationStatus> statuses = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        return applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(firstMilestone, lastMilestone, person, statuses, HOLIDAY).stream()
+        return applicationService.getApplicationsForACertainPeriodAndPersonAndVacationCategory(firstMilestone, lastMilestone, person, activeStatuses(), HOLIDAY).stream()
             .map(application -> getUsedVacationDays(application, person, firstMilestone, lastMilestone))
             .reduce(ZERO, BigDecimal::add);
     }
 
     private Map<Account, UsedVacationDaysTuple> getUsedVacationDays(List<Account> holidayAccounts, DateRange dateRange, Map<Person, WorkingTimeCalendar> workingTimeCalendarsByPerson) {
 
-        final LocalDate firstDayOfYear = dateRange.getStartDate().with(firstDayOfYear());
-        final LocalDate lastDayOfYear = dateRange.getEndDate().with(lastDayOfYear());
+        final LocalDate firstDayOfYear = dateRange.startDate().with(firstDayOfYear());
+        final LocalDate lastDayOfYear = dateRange.endDate().with(lastDayOfYear());
 
         final List<Person> persons = holidayAccounts.stream().map(Account::getPerson).distinct().collect(toList());
-        final List<ApplicationStatus> status = List.of(WAITING, TEMPORARY_ALLOWED, ALLOWED, ALLOWED_CANCELLATION_REQUESTED);
-        final List<Application> applicationsTouchingDateRange = applicationService.getForStatesAndPerson(status, persons, firstDayOfYear, lastDayOfYear);
+        final List<Application> applicationsTouchingDateRange = applicationService.getForStatesAndPerson(activeStatuses(), persons, firstDayOfYear, lastDayOfYear);
 
         return getUsedVacationDaysBetweenTwoMilestones(holidayAccounts, applicationsTouchingDateRange, dateRange, workingTimeCalendarsByPerson);
     }
@@ -215,8 +207,8 @@ public class VacationDaysService {
         final LocalDate applicationStartOrFirstDayOfYear = max(application.getStartDate(), holidayAccountValidFrom.with(firstDayOfYear()));
         final LocalDate applicationEndOrLastDayOfYear = min(application.getEndDate(), holidayAccountValidFrom.with(lastDayOfYear()));
 
-        final LocalDate applicationStartOrFirstDayOfYearOrFrom = max(applicationStartOrFirstDayOfYear, dateRange.getStartDate());
-        final LocalDate applicationEndOrLastDayOfYearOrTo = min(applicationEndOrLastDayOfYear, dateRange.getEndDate());
+        final LocalDate applicationStartOrFirstDayOfYearOrFrom = max(applicationStartOrFirstDayOfYear, dateRange.startDate());
+        final LocalDate applicationEndOrLastDayOfYearOrTo = min(applicationEndOrLastDayOfYear, dateRange.endDate());
 
         // use vacation days scoped to from/to date range
         final BigDecimal dateRangeWorkDaysCountBeforeExpiryDate;
